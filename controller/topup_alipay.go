@@ -41,6 +41,8 @@ const (
 
 var alipayClientRequestIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{16,64}$`)
 
+var errAlipayTradeNotExist = errors.New("支付宝交易不存在")
+
 type alipayRuntime struct {
 	config     setting.AlipayConfig
 	privateKey *rsa.PrivateKey
@@ -69,6 +71,10 @@ type alipayQueryBizContent struct {
 	OutTradeNo string `json:"out_trade_no"`
 }
 
+type alipayCloseBizContent struct {
+	OutTradeNo string `json:"out_trade_no"`
+}
+
 type alipayPrecreateResponse struct {
 	Code       string `json:"code"`
 	Msg        string `json:"msg"`
@@ -90,6 +96,15 @@ type alipayQueryResponse struct {
 	SendPayDate string `json:"send_pay_date"`
 }
 
+type alipayCloseResponse struct {
+	Code       string `json:"code"`
+	Msg        string `json:"msg"`
+	SubCode    string `json:"sub_code"`
+	SubMsg     string `json:"sub_msg"`
+	OutTradeNo string `json:"out_trade_no"`
+	TradeNo    string `json:"trade_no"`
+}
+
 type alipayPrecreateGatewayResponse struct {
 	Response json.RawMessage `json:"alipay_trade_precreate_response"`
 	Sign     string          `json:"sign"`
@@ -97,6 +112,11 @@ type alipayPrecreateGatewayResponse struct {
 
 type alipayQueryGatewayResponse struct {
 	Response json.RawMessage `json:"alipay_trade_query_response"`
+	Sign     string          `json:"sign"`
+}
+
+type alipayCloseGatewayResponse struct {
+	Response json.RawMessage `json:"alipay_trade_close_response"`
 	Sign     string          `json:"sign"`
 }
 
@@ -318,28 +338,53 @@ func (runtime *alipayRuntime) gatewayParams(method string, bizContent any, notif
 	return values, nil
 }
 
-func (runtime *alipayRuntime) precreate(ctx context.Context, bizContent alipayPrecreateBizContent) (alipayPrecreateResponse, error) {
-	params, err := runtime.gatewayParams("alipay.trade.precreate", bizContent, runtime.config.NotifyURL)
-	if err != nil {
-		return alipayPrecreateResponse{}, err
-	}
+func (runtime *alipayRuntime) callGateway(ctx context.Context, params url.Values) ([]byte, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, runtime.config.GatewayURL, strings.NewReader(params.Encode()))
 	if err != nil {
-		return alipayPrecreateResponse{}, err
+		return nil, err
 	}
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded;charset=utf-8")
 
 	response, err := runtime.httpClient.Do(request)
 	if err != nil {
-		return alipayPrecreateResponse{}, err
+		return nil, err
 	}
 	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("支付宝网关返回 HTTP %d", response.StatusCode)
+	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, alipayGatewayResponseLimit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > alipayGatewayResponseLimit {
+		return nil, errors.New("支付宝响应体过大")
+	}
+	return body, nil
+}
+
+func alipayGatewayBusinessError(code, msg, subCode, subMsg string) error {
+	if subCode == "ACQ.TRADE_NOT_EXIST" {
+		return errAlipayTradeNotExist
+	}
+	message := subMsg
+	if message == "" {
+		message = msg
+	}
+	if message == "" {
+		message = code
+	}
+	return errors.New(message)
+}
+
+func (runtime *alipayRuntime) precreate(ctx context.Context, bizContent alipayPrecreateBizContent) (alipayPrecreateResponse, error) {
+	params, err := runtime.gatewayParams("alipay.trade.precreate", bizContent, runtime.config.NotifyURL)
 	if err != nil {
 		return alipayPrecreateResponse{}, err
 	}
-	if int64(len(body)) > alipayGatewayResponseLimit {
-		return alipayPrecreateResponse{}, errors.New("支付宝响应体过大")
+	body, err := runtime.callGateway(ctx, params)
+	if err != nil {
+		return alipayPrecreateResponse{}, err
 	}
 	var gatewayResponse alipayPrecreateGatewayResponse
 	if err = common.Unmarshal(body, &gatewayResponse); err != nil {
@@ -353,11 +398,12 @@ func (runtime *alipayRuntime) precreate(ctx context.Context, bizContent alipayPr
 		return alipayPrecreateResponse{}, err
 	}
 	if precreateResponse.Code != "10000" {
-		message := precreateResponse.SubMsg
-		if message == "" {
-			message = precreateResponse.Msg
-		}
-		return alipayPrecreateResponse{}, errors.New(message)
+		return alipayPrecreateResponse{}, alipayGatewayBusinessError(
+			precreateResponse.Code,
+			precreateResponse.Msg,
+			precreateResponse.SubCode,
+			precreateResponse.SubMsg,
+		)
 	}
 	if precreateResponse.QRCode == "" {
 		return alipayPrecreateResponse{}, errors.New("支付宝未返回二维码")
@@ -370,23 +416,9 @@ func (runtime *alipayRuntime) query(ctx context.Context, tradeNo string) (alipay
 	if err != nil {
 		return alipayQueryResponse{}, err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, runtime.config.GatewayURL, strings.NewReader(params.Encode()))
+	body, err := runtime.callGateway(ctx, params)
 	if err != nil {
 		return alipayQueryResponse{}, err
-	}
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded;charset=utf-8")
-
-	response, err := runtime.httpClient.Do(request)
-	if err != nil {
-		return alipayQueryResponse{}, err
-	}
-	defer response.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(response.Body, alipayGatewayResponseLimit+1))
-	if err != nil {
-		return alipayQueryResponse{}, err
-	}
-	if int64(len(body)) > alipayGatewayResponseLimit {
-		return alipayQueryResponse{}, errors.New("支付宝响应体过大")
 	}
 	var gatewayResponse alipayQueryGatewayResponse
 	if err = common.Unmarshal(body, &gatewayResponse); err != nil {
@@ -400,13 +432,48 @@ func (runtime *alipayRuntime) query(ctx context.Context, tradeNo string) (alipay
 		return alipayQueryResponse{}, err
 	}
 	if queryResponse.Code != "10000" {
-		message := queryResponse.SubMsg
-		if message == "" {
-			message = queryResponse.Msg
-		}
-		return alipayQueryResponse{}, errors.New(message)
+		return alipayQueryResponse{}, alipayGatewayBusinessError(
+			queryResponse.Code,
+			queryResponse.Msg,
+			queryResponse.SubCode,
+			queryResponse.SubMsg,
+		)
 	}
 	return queryResponse, nil
+}
+
+func (runtime *alipayRuntime) closeTrade(ctx context.Context, tradeNo string) error {
+	params, err := runtime.gatewayParams("alipay.trade.close", alipayCloseBizContent{OutTradeNo: tradeNo}, "")
+	if err != nil {
+		return err
+	}
+	body, err := runtime.callGateway(ctx, params)
+	if err != nil {
+		return err
+	}
+	var gatewayResponse alipayCloseGatewayResponse
+	if err = common.Unmarshal(body, &gatewayResponse); err != nil {
+		return err
+	}
+	if err = runtime.verifyGatewayResponse(gatewayResponse.Response, gatewayResponse.Sign); err != nil {
+		return fmt.Errorf("支付宝关单响应验签失败: %w", err)
+	}
+	var closeResponse alipayCloseResponse
+	if err = common.Unmarshal(gatewayResponse.Response, &closeResponse); err != nil {
+		return err
+	}
+	if closeResponse.Code != "10000" {
+		return alipayGatewayBusinessError(
+			closeResponse.Code,
+			closeResponse.Msg,
+			closeResponse.SubCode,
+			closeResponse.SubMsg,
+		)
+	}
+	if closeResponse.OutTradeNo != "" && closeResponse.OutTradeNo != tradeNo {
+		return errors.New("支付宝关单响应订单号不匹配")
+	}
+	return nil
 }
 
 func alipaySuccessTime(raw string) time.Time {
@@ -579,8 +646,18 @@ func reconcileAlipayOrder(ctx context.Context, order *model.AlipayOrder) {
 	if err != nil {
 		return
 	}
+	reconcileAlipayOrderWithRuntime(ctx, runtime, order)
+}
+
+func reconcileAlipayOrderWithRuntime(ctx context.Context, runtime *alipayRuntime, order *model.AlipayOrder) {
 	queryResponse, err := runtime.query(ctx, order.OutTradeNo)
 	if err != nil {
+		if errors.Is(err, errAlipayTradeNotExist) && time.Now().Unix() >= order.ExpiresAt {
+			if closeErr := model.CloseAlipayOrder(order.OutTradeNo); closeErr != nil {
+				logger.LogError(ctx, fmt.Sprintf("支付宝关闭不存在订单失败 trade_no=%s error=%q", order.OutTradeNo, closeErr.Error()))
+			}
+			return
+		}
 		logger.LogWarn(ctx, fmt.Sprintf("支付宝主动查单失败 trade_no=%s error=%q", order.OutTradeNo, err.Error()))
 		return
 	}
@@ -605,7 +682,20 @@ func reconcileAlipayOrder(ctx context.Context, order *model.AlipayOrder) {
 			logger.LogError(ctx, fmt.Sprintf("支付宝主动查单入账失败 trade_no=%s error=%q", order.OutTradeNo, completionErr.Error()))
 		}
 	case "TRADE_CLOSED":
-		_ = model.CloseAlipayOrder(order.OutTradeNo)
+		if closeErr := model.CloseAlipayOrder(order.OutTradeNo); closeErr != nil {
+			logger.LogError(ctx, fmt.Sprintf("支付宝同步远端关单状态失败 trade_no=%s error=%q", order.OutTradeNo, closeErr.Error()))
+		}
+	case "WAIT_BUYER_PAY":
+		if time.Now().Unix() < order.ExpiresAt {
+			return
+		}
+		if closeErr := runtime.closeTrade(ctx, order.OutTradeNo); closeErr != nil && !errors.Is(closeErr, errAlipayTradeNotExist) {
+			logger.LogWarn(ctx, fmt.Sprintf("支付宝远程关单失败 trade_no=%s error=%q", order.OutTradeNo, closeErr.Error()))
+			return
+		}
+		if closeErr := model.CloseAlipayOrder(order.OutTradeNo); closeErr != nil {
+			logger.LogError(ctx, fmt.Sprintf("支付宝本地关单失败 trade_no=%s error=%q", order.OutTradeNo, closeErr.Error()))
+		}
 	}
 }
 

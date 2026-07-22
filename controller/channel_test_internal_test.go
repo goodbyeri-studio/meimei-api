@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
@@ -15,6 +16,26 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestGetChannelTestTimeoutUsesBoundedConfiguration(t *testing.T) {
+	testCases := []struct {
+		name     string
+		value    string
+		expected time.Duration
+	}{
+		{name: "default", value: "", expected: defaultChannelTestTimeout},
+		{name: "negative", value: "-1", expected: defaultChannelTestTimeout},
+		{name: "above maximum", value: "999999999999999999", expected: defaultChannelTestTimeout},
+		{name: "valid", value: "30", expected: 30 * time.Second},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Setenv("CHANNEL_TEST_TIMEOUT_SECONDS", testCase.value)
+			require.Equal(t, testCase.expected, getChannelTestTimeout())
+		})
+	}
+}
 
 func TestSettleTestQuotaUsesTieredBilling(t *testing.T) {
 	info := &relaycommon.RelayInfo{

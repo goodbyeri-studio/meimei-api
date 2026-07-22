@@ -42,8 +42,24 @@ type testResult struct {
 
 const (
 	channelTestPrompt         = "Reply with exactly the word OK."
+	minChannelTestTimeout     = time.Second
 	defaultChannelTestTimeout = 120 * time.Second
+	maxChannelTestTimeout     = 10 * time.Minute
 )
+
+func getChannelTestTimeout() time.Duration {
+	timeoutSeconds := common.GetEnvOrDefault("CHANNEL_TEST_TIMEOUT_SECONDS", int(defaultChannelTestTimeout/time.Second))
+	if timeoutSeconds < int(minChannelTestTimeout/time.Second) || timeoutSeconds > int(maxChannelTestTimeout/time.Second) {
+		common.SysError(fmt.Sprintf(
+			"CHANNEL_TEST_TIMEOUT_SECONDS must be between %d and %d, using default value: %d",
+			int(minChannelTestTimeout/time.Second),
+			int(maxChannelTestTimeout/time.Second),
+			int(defaultChannelTestTimeout/time.Second),
+		))
+		return defaultChannelTestTimeout
+	}
+	return time.Duration(timeoutSeconds) * time.Second
+}
 
 func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointType string) string {
 	normalized := strings.TrimSpace(endpointType)
@@ -913,10 +929,7 @@ type channelTestSummary struct {
 // the system task can surface progress.
 func performChannelTests(ctx context.Context, channels []*model.Channel, testUserID int, allowDisable bool, report func(processed, total int)) channelTestSummary {
 	summary := channelTestSummary{}
-	testTimeout := time.Duration(common.GetEnvOrDefault("CHANNEL_TEST_TIMEOUT_SECONDS", int(defaultChannelTestTimeout/time.Second))) * time.Second
-	if testTimeout <= 0 {
-		testTimeout = defaultChannelTestTimeout
-	}
+	testTimeout := getChannelTestTimeout()
 	var disableThreshold = int64(common.ChannelDisableThreshold * 1000)
 	if disableThreshold == 0 {
 		disableThreshold = 10000000 // a impossible value
