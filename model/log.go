@@ -92,7 +92,10 @@ const (
 	LogTypeLogin   = 7
 )
 
-const UserLogRetentionLimit = 500
+const (
+	UserLogDisplayLimit     = 500
+	ConsumeLogRetentionDays = 7
+)
 
 func ensureLogRequestId(log *Log) {
 	if log != nil && log.RequestId == "" {
@@ -597,14 +600,14 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 		common.SysError("failed to count user logs: " + err.Error())
 		return nil, 0, errors.New("查询日志失败")
 	}
-	if total > UserLogRetentionLimit {
-		total = UserLogRetentionLimit
+	if total > UserLogDisplayLimit {
+		total = UserLogDisplayLimit
 	}
-	if startIdx >= UserLogRetentionLimit {
+	if startIdx >= UserLogDisplayLimit {
 		return []*Log{}, total, nil
 	}
-	if startIdx+num > UserLogRetentionLimit {
-		num = UserLogRetentionLimit - startIdx
+	if startIdx+num > UserLogDisplayLimit {
+		num = UserLogDisplayLimit - startIdx
 	}
 	order := "logs.id desc"
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
@@ -711,94 +714,48 @@ func CountOldLog(ctx context.Context, targetTimestamp int64) (int64, error) {
 	return total, nil
 }
 
-func TrimUserLogsBeyondLimit(ctx context.Context, userId int, limit int) (int64, error) {
-	if userId <= 0 || limit <= 0 {
+func DeleteExpiredConsumeLogs(ctx context.Context, targetTimestamp int64, limit int) (int64, error) {
+	if targetTimestamp <= 0 {
 		return 0, nil
+	}
+	if limit <= 0 {
+		limit = 1000
 	}
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
 
-	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
-		var cutoff Log
-		result := LOG_DB.WithContext(ctx).
-			Select("created_at", "request_id").
-			Where("user_id = ?", userId).
-			Order(clickHouseLogOrder("")).
-			Offset(limit - 1).
-			Limit(1).
-			Find(&cutoff)
-		if result.Error != nil {
-			return 0, result.Error
-		}
-		if result.RowsAffected == 0 {
-			return 0, nil
-		}
+	tx := LOG_DB.WithContext(ctx).Model(&Log{}).
+		Where("type = ? AND user_id > 0 AND created_at < ?", LogTypeConsume, targetTimestamp)
 
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		var total int64
-		if err := LOG_DB.WithContext(ctx).Model(&Log{}).
-			Where("user_id = ? AND (created_at < ? OR (created_at = ? AND request_id < ?))", userId, cutoff.CreatedAt, cutoff.CreatedAt, cutoff.RequestId).
-			Count(&total).Error; err != nil {
+		if err := tx.Count(&total).Error; err != nil {
 			return 0, err
 		}
 		if total == 0 {
 			return 0, nil
 		}
 		if err := LOG_DB.WithContext(ctx).Exec(
-			"ALTER TABLE logs DELETE WHERE user_id = ? AND (created_at < ? OR (created_at = ? AND request_id < ?)) SETTINGS mutations_sync = 1",
-			userId,
-			cutoff.CreatedAt,
-			cutoff.CreatedAt,
-			cutoff.RequestId,
+			"ALTER TABLE logs DELETE WHERE type = ? AND user_id > 0 AND created_at < ? SETTINGS mutations_sync = 1",
+			LogTypeConsume,
+			targetTimestamp,
 		).Error; err != nil {
 			return 0, err
 		}
 		return total, nil
 	}
 
-	var cutoff Log
-	result := LOG_DB.WithContext(ctx).
-		Select("id").
-		Where("user_id = ?", userId).
-		Order("id desc").
-		Offset(limit - 1).
-		Limit(1).
-		Find(&cutoff)
-	if result.Error != nil {
-		return 0, result.Error
-	}
-	if result.RowsAffected == 0 {
-		return 0, nil
-	}
-
-	result = LOG_DB.WithContext(ctx).
-		Where("user_id = ? AND id < ?", userId, cutoff.Id).
-		Delete(&Log{})
-	return result.RowsAffected, result.Error
-}
-
-func TrimAllUserLogsBeyondLimit(ctx context.Context, limit int) (int64, error) {
-	if limit <= 0 {
-		return 0, nil
-	}
-
-	var userIds []int
-	if err := LOG_DB.WithContext(ctx).Model(&Log{}).
-		Distinct("user_id").
-		Where("user_id > 0").
-		Pluck("user_id", &userIds).Error; err != nil {
+	var ids []int
+	if err := tx.Select("id").Order("id asc").Limit(limit).Pluck("id", &ids).Error; err != nil {
 		return 0, err
 	}
-
-	var deleted int64
-	for _, userId := range userIds {
-		count, err := TrimUserLogsBeyondLimit(ctx, userId, limit)
-		if err != nil {
-			return deleted, err
-		}
-		deleted += count
+	if len(ids) == 0 {
+		return 0, nil
 	}
-	return deleted, nil
+
+	result := LOG_DB.WithContext(ctx).Where("id IN ?", ids).Delete(&Log{})
+	return result.RowsAffected, result.Error
 }
 
 func DeleteOldLogBatch(ctx context.Context, targetTimestamp int64, limit int) (int64, error) {

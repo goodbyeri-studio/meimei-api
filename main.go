@@ -129,7 +129,7 @@ func main() {
 	// Subscription quota reset task (daily/weekly/monthly/custom)
 	service.StartSubscriptionQuotaResetTask()
 
-	// Keep each user's billing detail history bounded for the customer console.
+	// Retain customer consumption logs for seven days; the console applies its own display cap.
 	service.StartLogRetentionTask()
 
 	// Report this process as a system instance so the System Info page can show

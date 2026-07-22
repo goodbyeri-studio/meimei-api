@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTrimUserLogsBeyondLimitKeepsNewestRows(t *testing.T) {
+func TestDeleteExpiredConsumeLogsKeepsRecentAndNonConsumeRows(t *testing.T) {
 	const userId = 910001
 	const otherUserId = 910002
 	require.NoError(t, LOG_DB.Where("user_id IN ?", []int{userId, otherUserId}).Delete(&Log{}).Error)
@@ -17,49 +17,50 @@ func TestTrimUserLogsBeyondLimitKeepsNewestRows(t *testing.T) {
 		require.NoError(t, LOG_DB.Where("user_id IN ?", []int{userId, otherUserId}).Delete(&Log{}).Error)
 	})
 
-	logs := make([]Log, 0, UserLogRetentionLimit+8)
-	for i := 1; i <= UserLogRetentionLimit+5; i++ {
-		logs = append(logs, Log{
-			UserId:    userId,
-			CreatedAt: int64(i),
-			RequestId: fmt.Sprintf("retention-%03d", i),
-		})
-	}
-	for i := 1; i <= 3; i++ {
-		logs = append(logs, Log{
-			UserId:    otherUserId,
-			CreatedAt: int64(i),
-			RequestId: fmt.Sprintf("other-%03d", i),
-		})
+	const cutoff int64 = 1000
+	logs := []Log{
+		{UserId: userId, Type: LogTypeConsume, CreatedAt: cutoff - 2, RequestId: "expired-consume-1"},
+		{UserId: otherUserId, Type: LogTypeConsume, CreatedAt: cutoff - 1, RequestId: "expired-consume-2"},
+		{UserId: userId, Type: LogTypeConsume, CreatedAt: cutoff, RequestId: "boundary-consume"},
+		{UserId: userId, Type: LogTypeConsume, CreatedAt: cutoff + 1, RequestId: "recent-consume"},
+		{UserId: userId, Type: LogTypeTopup, CreatedAt: cutoff - 3, RequestId: "expired-topup"},
 	}
 	require.NoError(t, LOG_DB.CreateInBatches(logs, 100).Error)
 
-	deleted, err := TrimUserLogsBeyondLimit(context.Background(), userId, UserLogRetentionLimit)
+	deleted, err := DeleteExpiredConsumeLogs(context.Background(), cutoff, 1)
 	require.NoError(t, err)
-	assert.Equal(t, int64(5), deleted)
+	assert.Equal(t, int64(1), deleted)
+
+	deleted, err = DeleteExpiredConsumeLogs(context.Background(), cutoff, 1)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), deleted)
+
+	deleted, err = DeleteExpiredConsumeLogs(context.Background(), cutoff, 1)
+	require.NoError(t, err)
+	assert.Zero(t, deleted)
 
 	var retained []Log
-	require.NoError(t, LOG_DB.Where("user_id = ?", userId).Order("id asc").Find(&retained).Error)
-	require.Len(t, retained, UserLogRetentionLimit)
-	assert.Equal(t, int64(6), retained[0].CreatedAt)
-	assert.Equal(t, int64(UserLogRetentionLimit+5), retained[len(retained)-1].CreatedAt)
-
-	var otherCount int64
-	require.NoError(t, LOG_DB.Model(&Log{}).Where("user_id = ?", otherUserId).Count(&otherCount).Error)
-	assert.Equal(t, int64(3), otherCount)
+	require.NoError(t, LOG_DB.Where("user_id IN ?", []int{userId, otherUserId}).Order("created_at asc").Find(&retained).Error)
+	require.Len(t, retained, 3)
+	assert.Equal(t, []string{"expired-topup", "boundary-consume", "recent-consume"}, []string{
+		retained[0].RequestId,
+		retained[1].RequestId,
+		retained[2].RequestId,
+	})
 }
 
-func TestGetUserLogsCapsVisibleHistoryAtRetentionLimit(t *testing.T) {
+func TestGetUserLogsCapsVisibleHistoryByUserAcrossTokens(t *testing.T) {
 	const userId = 910003
 	require.NoError(t, LOG_DB.Where("user_id = ?", userId).Delete(&Log{}).Error)
 	t.Cleanup(func() {
 		require.NoError(t, LOG_DB.Where("user_id = ?", userId).Delete(&Log{}).Error)
 	})
 
-	logs := make([]Log, 0, UserLogRetentionLimit+1)
-	for i := 1; i <= UserLogRetentionLimit+1; i++ {
+	logs := make([]Log, 0, UserLogDisplayLimit+1)
+	for i := 1; i <= UserLogDisplayLimit+1; i++ {
 		logs = append(logs, Log{
 			UserId:    userId,
+			TokenId:   i%2 + 1,
 			CreatedAt: int64(i),
 			RequestId: fmt.Sprintf("visible-%03d", i),
 		})
@@ -68,11 +69,12 @@ func TestGetUserLogsCapsVisibleHistoryAtRetentionLimit(t *testing.T) {
 
 	logsPage, total, err := GetUserLogs(userId, LogTypeUnknown, 0, 0, "", "", 490, 20, "", "", "")
 	require.NoError(t, err)
-	assert.Equal(t, int64(UserLogRetentionLimit), total)
+	assert.Equal(t, int64(UserLogDisplayLimit), total)
 	require.Len(t, logsPage, 10)
+	assert.NotEqual(t, logsPage[0].TokenId, logsPage[1].TokenId)
 
-	beyondLimit, total, err := GetUserLogs(userId, LogTypeUnknown, 0, 0, "", "", UserLogRetentionLimit, 10, "", "", "")
+	beyondLimit, total, err := GetUserLogs(userId, LogTypeUnknown, 0, 0, "", "", UserLogDisplayLimit, 10, "", "", "")
 	require.NoError(t, err)
-	assert.Equal(t, int64(UserLogRetentionLimit), total)
+	assert.Equal(t, int64(UserLogDisplayLimit), total)
 	assert.Empty(t, beyondLimit)
 }

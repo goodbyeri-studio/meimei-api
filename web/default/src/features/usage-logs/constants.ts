@@ -68,6 +68,7 @@ export const LOG_TYPE_ENUM = {
  */
 export const LOG_TYPE_ALL_VALUE = '0' as const
 export const DEFAULT_BILLING_LOG_TYPE_VALUE = String(LOG_TYPE_ENUM.CONSUME)
+export const COMMON_LOG_DISPLAY_LIMIT = 500
 
 // ============================================================================
 // Time Range Presets

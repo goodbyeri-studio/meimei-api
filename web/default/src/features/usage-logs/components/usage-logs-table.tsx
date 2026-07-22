@@ -32,6 +32,7 @@ import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { cn } from '@/lib/utils'
 
 import {
+  COMMON_LOG_DISPLAY_LIMIT,
   DEFAULT_BILLING_LOG_TYPE_VALUE,
   DEFAULT_LOGS_DATA,
   LOG_TYPE_ALL_VALUE,
@@ -162,6 +163,10 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   })
 
   const logs = data?.items || []
+  const totalCount =
+    logCategory === 'common'
+      ? Math.min(data?.total || 0, COMMON_LOG_DISPLAY_LIMIT)
+      : data?.total || 0
   const columns = useColumnsByCategory(logCategory, isAdmin)
   const isLoadingData = isLoading || (isFetching && !data)
 
@@ -179,7 +184,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     onColumnFiltersChange,
     manualPagination: true,
     manualFiltering: true,
-    totalCount: data?.total || 0,
+    totalCount,
     ensurePageInRange,
   })
 
