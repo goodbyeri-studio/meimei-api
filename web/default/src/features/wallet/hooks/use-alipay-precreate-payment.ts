@@ -31,8 +31,9 @@ import type { AlipayPrecreateOrder } from '../types'
 export function useAlipayPrecreatePayment() {
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [createdOrder, setCreatedOrder] =
-    useState<AlipayPrecreateOrder | null>(null)
+  const [createdOrder, setCreatedOrder] = useState<AlipayPrecreateOrder | null>(
+    null
+  )
 
   const statusQuery = useQuery({
     queryKey: ['wallet', 'alipay-precreate-order', createdOrder?.trade_no],
@@ -58,6 +59,8 @@ export function useAlipayPrecreatePayment() {
   const order = statusQuery.data || createdOrder
 
   const processAlipayPrecreatePayment = useCallback(async (amount: number) => {
+    setOpen(false)
+    setCreatedOrder(null)
     setCreating(true)
     try {
       const response = await requestAlipayPrecreatePayment({
@@ -79,9 +82,14 @@ export function useAlipayPrecreatePayment() {
     }
   }, [])
 
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen)
+    if (!nextOpen) setCreatedOrder(null)
+  }, [])
+
   return {
     open,
-    setOpen,
+    setOpen: handleOpenChange,
     order,
     creating,
     refreshing: statusQuery.isFetching,

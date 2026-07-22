@@ -66,6 +66,8 @@ export function useWechatNativePayment() {
       : createdOrder
 
   const processWechatNativePayment = useCallback(async (amount: number) => {
+    setOpen(false)
+    setCreatedOrder(null)
     setCreating(true)
     try {
       const response = await requestWechatNativePayment({
@@ -87,9 +89,14 @@ export function useWechatNativePayment() {
     }
   }, [])
 
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen)
+    if (!nextOpen) setCreatedOrder(null)
+  }, [])
+
   return {
     open,
-    setOpen,
+    setOpen: handleOpenChange,
     order,
     creating,
     refreshing: statusQuery.isFetching,

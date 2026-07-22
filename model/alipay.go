@@ -139,6 +139,7 @@ func CompleteAlipayTopUp(completion AlipayCompletion) (bool, error) {
 	credited := false
 	var creditedUserID int
 	var creditedQuota int
+	var affiliateReward *affiliateTopUpReward
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		notification := AlipayNotification{
 			EventId:          completion.EventID,
@@ -211,6 +212,11 @@ func CompleteAlipayTopUp(completion AlipayCompletion) (bool, error) {
 			Update("quota", gorm.Expr("quota + ?", quotaToAdd)).Error; err != nil {
 			return err
 		}
+		reward, rewardErr := creditAffiliateTopUpReward(tx, topUp.UserId, quotaToAdd)
+		if rewardErr != nil {
+			return rewardErr
+		}
+		affiliateReward = reward
 		if err := tx.Model(&notification).Updates(map[string]interface{}{
 			"processing_status": "processed",
 			"processed_at":      common.GetTimestamp(),
@@ -227,6 +233,7 @@ func CompleteAlipayTopUp(completion AlipayCompletion) (bool, error) {
 		return false, err
 	}
 	if credited {
+		recordAffiliateTopUpReward(affiliateReward)
 		RecordTopupLog(creditedUserID, fmt.Sprintf("支付宝扫码充值成功，充值额度: %v", logger.FormatQuota(creditedQuota)), "", PaymentMethodAlipayPrecreate, PaymentProviderAlipayPrecreate)
 	}
 	return credited, nil

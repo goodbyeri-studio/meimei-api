@@ -10,12 +10,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func insertAlipayOrderForTest(t *testing.T, userID int, tradeNo string, amountFen int64) {
+func insertAlipayOrderForTest(t *testing.T, userID int, tradeNo string, amountFen int64, topUpAmount int64) {
 	t.Helper()
 	insertUserForPaymentGuardTest(t, userID, 0)
 	topUp := &TopUp{
 		UserId:          userID,
-		Amount:          2,
+		Amount:          topUpAmount,
 		Money:           float64(amountFen) / 100,
 		TradeNo:         tradeNo,
 		PaymentMethod:   PaymentMethodAlipayPrecreate,
@@ -28,7 +28,7 @@ func insertAlipayOrderForTest(t *testing.T, userID int, tradeNo string, amountFe
 		ClientRequestId: "request_alipay_123456",
 		OutTradeNo:      tradeNo,
 		AmountFen:       amountFen,
-		CreditQuota:     common.QuotaFromDecimal(decimal.NewFromInt(2).Mul(decimal.NewFromFloat(common.QuotaPerUnit))),
+		CreditQuota:     common.QuotaFromDecimal(decimal.NewFromInt(topUpAmount).Mul(decimal.NewFromFloat(common.QuotaPerUnit))),
 		Currency:        "CNY",
 		Status:          AlipayOrderStatusPending,
 		ExpiresAt:       time.Now().Add(15 * time.Minute).Unix(),
@@ -40,7 +40,7 @@ func insertAlipayOrderForTest(t *testing.T, userID int, tradeNo string, amountFe
 
 func TestCompleteAlipayTopUp_IsIdempotentAcrossNotifications(t *testing.T) {
 	truncateTables(t)
-	insertAlipayOrderForTest(t, 701, "alipay-idempotent", 199)
+	insertAlipayOrderForTest(t, 701, "alipay-idempotent", 199, 2)
 
 	completion := AlipayCompletion{
 		EventID:     "notify-idempotent-1",
@@ -74,7 +74,7 @@ func TestCompleteAlipayTopUp_IsIdempotentAcrossNotifications(t *testing.T) {
 
 func TestCompleteAlipayTopUp_RejectsAmountMismatch(t *testing.T) {
 	truncateTables(t)
-	insertAlipayOrderForTest(t, 702, "alipay-amount-mismatch", 299)
+	insertAlipayOrderForTest(t, 702, "alipay-amount-mismatch", 299, 2)
 
 	credited, err := CompleteAlipayTopUp(AlipayCompletion{
 		EventID:     "notify-amount-mismatch",
@@ -93,4 +93,54 @@ func TestCompleteAlipayTopUp_RejectsAmountMismatch(t *testing.T) {
 	var notificationCount int64
 	require.NoError(t, DB.Model(&AlipayNotification{}).Count(&notificationCount).Error)
 	assert.Zero(t, notificationCount)
+}
+
+func TestCompleteAlipayTopUp_CreditsThreePercentToInviterOnce(t *testing.T) {
+	truncateTables(t)
+	inviter := &User{
+		Id:       703,
+		Username: "alipay_affiliate_inviter",
+		Status:   common.UserStatusEnabled,
+		AffCode:  "alipay-inviter",
+	}
+	require.NoError(t, DB.Create(inviter).Error)
+	insertAlipayOrderForTest(t, 704, "alipay-affiliate-reward", 5000, 50)
+	require.NoError(t, DB.Model(&User{}).Where("id = ?", 704).Update("inviter_id", inviter.Id).Error)
+
+	completion := AlipayCompletion{
+		EventID:     "notify-affiliate-1",
+		OutTradeNo:  "alipay-affiliate-reward",
+		TradeNo:     "trade-affiliate",
+		AmountFen:   5000,
+		Currency:    "CNY",
+		SuccessTime: time.Now(),
+		BodyDigest:  "digest-affiliate-1",
+	}
+	credited, err := CompleteAlipayTopUp(completion)
+	require.NoError(t, err)
+	assert.True(t, credited)
+
+	creditedQuota, clamp := common.QuotaFromDecimalChecked(
+		decimal.NewFromInt(50).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
+	)
+	require.Nil(t, clamp)
+	expectedReward, clamp := common.QuotaFromDecimalChecked(
+		decimal.NewFromInt(int64(creditedQuota)).Mul(decimal.NewFromInt(3)).Div(decimal.NewFromInt(100)),
+	)
+	require.Nil(t, clamp)
+
+	var creditedInviter User
+	require.NoError(t, DB.Where("id = ?", inviter.Id).First(&creditedInviter).Error)
+	assert.Equal(t, expectedReward, creditedInviter.AffQuota)
+	assert.Equal(t, expectedReward, creditedInviter.AffHistoryQuota)
+	assert.Zero(t, creditedInviter.Quota)
+
+	completion.EventID = "notify-affiliate-2"
+	completion.BodyDigest = "digest-affiliate-2"
+	credited, err = CompleteAlipayTopUp(completion)
+	require.NoError(t, err)
+	assert.False(t, credited)
+	require.NoError(t, DB.Where("id = ?", inviter.Id).First(&creditedInviter).Error)
+	assert.Equal(t, expectedReward, creditedInviter.AffQuota)
+	assert.Equal(t, expectedReward, creditedInviter.AffHistoryQuota)
 }

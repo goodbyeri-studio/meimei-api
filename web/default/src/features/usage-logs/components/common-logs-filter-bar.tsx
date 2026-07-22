@@ -38,7 +38,11 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
-import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
+import {
+  DEFAULT_BILLING_LOG_TYPE_VALUE,
+  LOG_TYPE_ALL_VALUE,
+  LOG_TYPE_FILTERS,
+} from '../constants'
 import { buildSearchParams } from '../lib/filter'
 import { getDefaultTimeRange } from '../lib/utils'
 import type { CommonLogFilters } from '../types'
@@ -54,6 +58,7 @@ import { useLogsViewScope, useUsageLogsContext } from './usage-logs-provider'
 const route = getRouteApi('/_authenticated/usage-logs/$section')
 
 type LogTypeValue = (typeof LOG_TYPE_FILTERS)[number]['value']
+const DEFAULT_BILLING_LOG_TYPE = DEFAULT_BILLING_LOG_TYPE_VALUE as LogTypeValue
 const logTypeValueSet = new Set<string>(
   LOG_TYPE_FILTERS.map((type) => type.value)
 )
@@ -74,7 +79,7 @@ function getLogTypeValue(value: unknown): LogTypeValue {
     typeof value[0] === 'string' &&
     isLogTypeValue(value[0])
     ? value[0]
-    : LOG_TYPE_ALL_VALUE
+    : DEFAULT_BILLING_LOG_TYPE
 }
 
 function buildSearchSourceKey(values: {
@@ -204,14 +209,14 @@ export function CommonLogsFilterBar<TData>(
     const { start, end } = getDefaultTimeRange()
     const resetFilters: CommonLogFilters = { startTime: start, endTime: end }
     const resetSearch = {
-      type: [LOG_TYPE_ALL_VALUE],
+      type: [DEFAULT_BILLING_LOG_TYPE],
       startTime: start.getTime(),
       endTime: end.getTime(),
     }
     setDraft({
       sourceKey: buildSearchSourceKey(resetSearch),
       filters: resetFilters,
-      logType: LOG_TYPE_ALL_VALUE,
+      logType: DEFAULT_BILLING_LOG_TYPE,
     })
 
     navigate({
