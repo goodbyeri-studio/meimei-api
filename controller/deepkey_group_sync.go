@@ -21,7 +21,7 @@ type deepKeyGroupSyncData struct {
 	Count            int                `json:"count"`
 }
 
-func buildDeepKeyGroupSyncData(catalog *deepKeyPricingCatalog) (*deepKeyGroupSyncData, error) {
+func buildDeepKeyGroupSyncData(catalog *deepKeyPricingCatalog, enabledChannelGroups map[string]struct{}) (*deepKeyGroupSyncData, error) {
 	if catalog == nil || len(catalog.GroupRatio) == 0 {
 		return nil, fmt.Errorf("DeepKey pricing returned no groups")
 	}
@@ -36,6 +36,9 @@ func buildDeepKeyGroupSyncData(catalog *deepKeyPricingCatalog) (*deepKeyGroupSyn
 		if ratio <= 0 || math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio > deepKeyMaxGroupRatio {
 			return nil, fmt.Errorf("DeepKey group %q ratio must be within (0, %d]", name, deepKeyMaxGroupRatio)
 		}
+		if _, enabled := enabledChannelGroups[name]; !enabled {
+			continue
+		}
 
 		description := strings.TrimSpace(catalog.UsableGroup[rawName])
 		if description == "" {
@@ -45,7 +48,7 @@ func buildDeepKeyGroupSyncData(catalog *deepKeyPricingCatalog) (*deepKeyGroupSyn
 		userUsableGroups[name] = description
 	}
 	if len(groupRatio) == 0 {
-		return nil, fmt.Errorf("DeepKey pricing returned no valid groups")
+		return nil, fmt.Errorf("DeepKey pricing has no groups backed by enabled local channels")
 	}
 
 	autoGroups := make([]string, 0, len(catalog.AutoGroups))
@@ -77,7 +80,12 @@ func SyncDeepKeyGroups(c *gin.Context) {
 		return
 	}
 
-	data, err := buildDeepKeyGroupSyncData(catalog)
+	enabledChannelGroups, err := model.GetEnabledChannelGroups()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	data, err := buildDeepKeyGroupSyncData(catalog, enabledChannelGroups)
 	if err != nil {
 		common.ApiErrorMsg(c, err.Error())
 		return
