@@ -20,6 +20,8 @@ import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { resolveDocsAssetPath } from './goodbyeri-docs-paths.mjs'
+
 const sourceOrigin = 'https://doc.deepkey.top'
 const publicRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -183,6 +185,13 @@ for (const slug of uniqueSlugs) {
   }
 }
 
+const assetDestinations = new Map(
+  [...assetPaths].map((assetPath) => [
+    assetPath,
+    resolveDocsAssetPath(outputDir, assetPath),
+  ])
+)
+
 await rm(outputDir, { recursive: true, force: true })
 await mkdir(path.join(outputDir, 'articles'), { recursive: true })
 await mkdir(path.join(outputDir, 'images'), { recursive: true })
@@ -197,9 +206,8 @@ for (const [articlePath, source] of articleSources) {
   await writeFile(path.join(outputDir, articlePath), source, 'utf8')
 }
 
-for (const assetPath of assetPaths) {
+for (const [assetPath, destination] of assetDestinations) {
   const response = await fetchResource(assetPath)
-  const destination = path.join(outputDir, assetPath)
   await mkdir(path.dirname(destination), { recursive: true })
 
   if (assetPath.endsWith('.css')) {
@@ -218,7 +226,7 @@ if (/deepkey(?:\.top)?/i.test(generatedText)) {
 }
 if (
   /<script\b|\son[a-z]+\s*=|javascript:|data:text\/html/i.test(
-    Array.from(articleSources.values()).join('\n')
+    [...articleSources.values()].join('\n')
   )
 ) {
   throw new Error('Generated customer articles still contain active content')

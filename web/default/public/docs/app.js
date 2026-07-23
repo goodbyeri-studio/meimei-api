@@ -55,8 +55,9 @@ For commercial licensing, please contact support@quantumnous.com
   function go(slug, push) {
     var targetSlug = findLink(slug) ? slug : defaultSlug
     var target = 'articles/' + targetSlug + '.html'
-    if (iframe.getAttribute('src') !== target)
+    if (iframe.getAttribute('src') !== target) {
       iframe.setAttribute('src', target)
+    }
     setActive(targetSlug)
     if (push && getHashSlug() !== targetSlug) location.hash = targetSlug
     closeNav()
