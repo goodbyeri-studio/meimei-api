@@ -20,6 +20,11 @@ import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import {
+  prepareArticleHtml,
+  prepareIndexHtml,
+  replaceCustomerFacingBrand,
+} from './goodbyeri-docs-html.mjs'
 import { resolveDocsAssetPath } from './goodbyeri-docs-paths.mjs'
 
 const sourceOrigin = 'https://doc.deepkey.top'
@@ -73,71 +78,6 @@ async function fetchResource(resourcePath) {
   return response
 }
 
-function replaceCustomerFacingBrand(content) {
-  return content
-    .replaceAll('https://doc.deepkey.top', 'https://goodbyeri.cc/docs')
-    .replaceAll('http://doc.deepkey.top', 'https://goodbyeri.cc/docs')
-    .replaceAll('https://deepkey.top', 'https://goodbyeri.cc')
-    .replaceAll('http://deepkey.top', 'https://goodbyeri.cc')
-    .replaceAll('doc.deepkey.top', 'goodbyeri.cc/docs')
-    .replaceAll('deepkey.top', 'goodbyeri.cc')
-    .replaceAll('DeepKey', 'Goodbyeri')
-    .replaceAll('deepkey', 'goodbyeri.cc')
-    .replaceAll(/[ \t]+$/gm, '')
-}
-
-function stripRemoteActiveContent(content) {
-  return content
-    .replaceAll(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
-    .replaceAll(/<script\b[^>]*\/?\s*>/gi, '')
-    .replaceAll(/<(?:iframe|object)\b[^>]*>[\s\S]*?<\/(?:iframe|object)>/gi, '')
-    .replaceAll(/<(?:iframe|object|embed)\b[^>]*\/?\s*>/gi, '')
-    .replaceAll(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replaceAll(/\s+srcdoc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replaceAll(
-      /\s+(href|src|xlink:href|formaction)\s*=\s*(["'])\s*(?:javascript|data:text\/html)[\s\S]*?\2/gi,
-      ''
-    )
-}
-
-function addCsp(content, policy) {
-  if (/http-equiv=["']Content-Security-Policy["']/i.test(content)) {
-    return content
-  }
-  const meta = `<meta http-equiv="Content-Security-Policy" content="${policy}">`
-  return content.replace(/<head(\s[^>]*)?>/i, (head) => `${head}\n  ${meta}`)
-}
-
-function prepareIndexHtml(content) {
-  const viewerPattern =
-    /<iframe\b(?=[^>]*\bid=["']viewer["'])[^>]*>[\s\S]*?<\/iframe\s*>/i
-  const viewer = content.match(viewerPattern)?.[0]
-  if (!viewer) {
-    throw new Error('Documentation index is missing the viewer iframe')
-  }
-  const viewerPlaceholder = '<!-- goodbyeri-docs-viewer -->'
-  const sanitized = replaceCustomerFacingBrand(
-    stripRemoteActiveContent(content.replace(viewerPattern, viewerPlaceholder))
-  )
-    .replace(viewerPlaceholder, viewer)
-    .replace(/<iframe\b([^>]*\bid=["']viewer["'][^>]*)>/i, (tag, attributes) =>
-      /\ssandbox\s*=/i.test(tag)
-        ? tag
-        : `<iframe${attributes} sandbox="allow-popups allow-popups-to-escape-sandbox">`
-    )
-    .replace(/<\/body>/i, '  <script src="app.js" defer></script>\n</body>')
-  return addCsp(sanitized, indexCsp)
-}
-
-function prepareArticleHtml(content) {
-  const sanitized = replaceCustomerFacingBrand(
-    stripRemoteActiveContent(content)
-  )
-    .replaceAll(/<source\b[^>]*\/?\s*>/gi, '')
-    .replaceAll(/((?:src|href)=["'])\/images\//gi, '$1../images/')
-  return addCsp(sanitized, articleCsp)
-}
-
 if (process.argv.includes('--harden-existing')) {
   const articlesDir = path.join(outputDir, 'articles')
   const entries = await readdir(articlesDir, { withFileTypes: true })
@@ -146,13 +86,13 @@ if (process.argv.includes('--harden-existing')) {
     if (!entry.isFile() || !entry.name.endsWith('.html')) continue
     const articlePath = path.join(articlesDir, entry.name)
     const source = await readFile(articlePath, 'utf8')
-    await writeFile(articlePath, prepareArticleHtml(source), 'utf8')
+    await writeFile(articlePath, prepareArticleHtml(source, articleCsp), 'utf8')
     hardenedCount++
   }
   const indexPath = path.join(outputDir, 'index.html')
   const indexSource = await readFile(indexPath, 'utf8')
   const docsApp = await readFile(appSourcePath, 'utf8')
-  await writeFile(indexPath, prepareIndexHtml(indexSource), 'utf8')
+  await writeFile(indexPath, prepareIndexHtml(indexSource, indexCsp), 'utf8')
   await writeFile(path.join(outputDir, 'app.js'), docsApp, 'utf8')
   console.log(`Hardened ${hardenedCount} existing documentation articles`)
   process.exit(0)
@@ -175,7 +115,7 @@ const assetPaths = new Set(['style.css', 'article.css'])
 for (const slug of uniqueSlugs) {
   const articlePath = `articles/${slug}.html`
   const articleSource = await (await fetchResource(articlePath)).text()
-  const preparedArticle = prepareArticleHtml(articleSource)
+  const preparedArticle = prepareArticleHtml(articleSource, articleCsp)
   articleSources.set(articlePath, preparedArticle)
 
   for (const match of preparedArticle.matchAll(
@@ -196,7 +136,7 @@ await rm(outputDir, { recursive: true, force: true })
 await mkdir(path.join(outputDir, 'articles'), { recursive: true })
 await mkdir(path.join(outputDir, 'images'), { recursive: true })
 
-const preparedIndex = prepareIndexHtml(indexSource)
+const preparedIndex = prepareIndexHtml(indexSource, indexCsp)
 const docsApp = await readFile(appSourcePath, 'utf8')
 
 await writeFile(path.join(outputDir, 'index.html'), preparedIndex, 'utf8')

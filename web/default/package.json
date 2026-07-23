@@ -16,7 +16,7 @@
     "copyright:check": "node scripts/add-copyright.mjs --check",
     "copyright": "node scripts/add-copyright.mjs",
     "docs:sync": "node scripts/sync-goodbyeri-docs.mjs",
-    "docs:test": "node --test scripts/goodbyeri-docs-paths.test.mjs",
+    "docs:test": "node --test scripts/goodbyeri-docs-paths.test.mjs scripts/goodbyeri-docs-html.test.mjs",
     "i18n:sync": "node scripts/sync-i18n.mjs",
     "knip": "knip"
   },
