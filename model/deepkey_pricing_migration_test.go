@@ -160,3 +160,52 @@ func TestValidateDeepKeyChannelGroupIsolationChecksCandidate(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "multiple upstream key configurations")
 }
+
+func TestUpdateChannelStatusRejectsInvalidDeepKeyEnable(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&Channel{}))
+	previousMemoryCacheEnabled := common.MemoryCacheEnabled
+	common.MemoryCacheEnabled = false
+	t.Cleanup(func() { common.MemoryCacheEnabled = previousMemoryCacheEnabled })
+
+	deepKeyURL := "https://deepkey.top"
+	names := []string{"deepkey-enable-existing", "deepkey-enable-conflict"}
+	t.Cleanup(func() { DB.Where("name in ?", names).Delete(&Channel{}) })
+	existing := Channel{
+		Name: names[0], Key: "key-one", Status: common.ChannelStatusEnabled,
+		BaseURL: &deepKeyURL, Group: "enable-conflict",
+	}
+	conflicting := Channel{
+		Name: names[1], Key: "key-two", Status: common.ChannelStatusManuallyDisabled,
+		BaseURL: &deepKeyURL, Group: "enable-conflict",
+	}
+	require.NoError(t, DB.Create(&existing).Error)
+	require.NoError(t, DB.Create(&conflicting).Error)
+
+	assert.False(t, UpdateChannelStatus(conflicting.Id, "", common.ChannelStatusEnabled, "test"))
+	require.NoError(t, DB.First(&conflicting, conflicting.Id).Error)
+	assert.Equal(t, common.ChannelStatusManuallyDisabled, conflicting.Status)
+}
+
+func TestEnableChannelByTagRejectsInvalidDeepKeyGroup(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&Channel{}))
+	deepKeyURL := "https://deepkey.top"
+	tag := "deepkey-enable-tag-conflict"
+	names := []string{"deepkey-tag-existing", "deepkey-tag-conflict"}
+	t.Cleanup(func() { DB.Where("name in ?", names).Delete(&Channel{}) })
+	existing := Channel{
+		Name: names[0], Key: "key-one", Status: common.ChannelStatusEnabled,
+		BaseURL: &deepKeyURL, Group: "tag-conflict",
+	}
+	conflicting := Channel{
+		Name: names[1], Key: "key-two", Status: common.ChannelStatusManuallyDisabled,
+		BaseURL: &deepKeyURL, Group: "tag-conflict", Tag: &tag,
+	}
+	require.NoError(t, DB.Create(&existing).Error)
+	require.NoError(t, DB.Create(&conflicting).Error)
+
+	err := EnableChannelByTag(tag)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "multiple upstream key configurations")
+	require.NoError(t, DB.First(&conflicting, conflicting.Id).Error)
+	assert.Equal(t, common.ChannelStatusManuallyDisabled, conflicting.Status)
+}

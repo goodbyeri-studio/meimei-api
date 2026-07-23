@@ -944,14 +944,6 @@ func UpdateChannel(c *gin.Context) {
 	}
 	clearChannelReadOnlyFields(&channel, requestData)
 
-	// 使用统一的校验函数
-	if err := validateChannel(&channel.Channel, false); err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
-		return
-	}
 	// Preserve existing ChannelInfo to ensure multi-key channels keep correct state even if the client does not send ChannelInfo in the request.
 	originChannel, err := model.GetChannelById(channel.Id, true)
 	if err != nil {
@@ -1056,9 +1048,19 @@ func UpdateChannel(c *gin.Context) {
 			// 覆盖模式：直接使用新密钥（默认行为，不需要特殊处理）
 		}
 	}
-	candidate := channel.Channel
-	candidate.Status = originChannel.Status
-	if err := model.ValidateDeepKeyChannelGroupIsolation(&candidate); err != nil {
+	candidate, err := mergeChannelPatchCandidate(originChannel, &channel, requestData)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := validateChannel(candidate, false); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	if err := model.ValidateDeepKeyChannelGroupIsolation(candidate); err != nil {
 		common.ApiError(c, err)
 		return
 	}
