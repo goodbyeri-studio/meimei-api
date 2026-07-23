@@ -279,6 +279,10 @@ func migrateDB() error {
 		&Log{},
 		&Midjourney{},
 		&TopUp{},
+		&WechatPayOrder{},
+		&WechatPayNotification{},
+		&AlipayOrder{},
+		&AlipayNotification{},
 		&QuotaData{},
 		&Task{},
 		&Model{},
@@ -301,6 +305,9 @@ func migrateDB() error {
 		&AuthzRole{},
 	)
 	if err != nil {
+		return err
+	}
+	if err := migrateLegacyDocsLink(DB); err != nil {
 		return err
 	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
@@ -333,6 +340,10 @@ func migrateDBFast() error {
 		{&Log{}, "Log"},
 		{&Midjourney{}, "Midjourney"},
 		{&TopUp{}, "TopUp"},
+		{&WechatPayOrder{}, "WechatPayOrder"},
+		{&WechatPayNotification{}, "WechatPayNotification"},
+		{&AlipayOrder{}, "AlipayOrder"},
+		{&AlipayNotification{}, "AlipayNotification"},
 		{&QuotaData{}, "QuotaData"},
 		{&Task{}, "Task"},
 		{&Model{}, "Model"},

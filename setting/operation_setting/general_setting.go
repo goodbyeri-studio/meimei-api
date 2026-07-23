@@ -8,10 +8,12 @@ const (
 	QuotaDisplayTypeCNY    = "CNY"
 	QuotaDisplayTypeTokens = "TOKENS"
 	QuotaDisplayTypeCustom = "CUSTOM"
+	DefaultDocsLink        = "https://goodbyeri.cc/docs/"
 )
 
 type GeneralSetting struct {
 	DocsLink            string `json:"docs_link"`
+	MonitorLink         string `json:"monitor_link"`
 	PingIntervalEnabled bool   `json:"ping_interval_enabled"`
 	PingIntervalSeconds int    `json:"ping_interval_seconds"`
 	// 当前站点额度展示类型：USD / CNY / TOKENS
@@ -24,7 +26,8 @@ type GeneralSetting struct {
 
 // 默认配置
 var generalSetting = GeneralSetting{
-	DocsLink:                   "https://docs.newapi.pro",
+	DocsLink:                   DefaultDocsLink,
+	MonitorLink:                "",
 	PingIntervalEnabled:        false,
 	PingIntervalSeconds:        60,
 	QuotaDisplayType:           QuotaDisplayTypeUSD,
