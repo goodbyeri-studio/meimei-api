@@ -142,7 +142,7 @@ jobs:
       - name: Install doctl
         uses: digitalocean/action-doctl@135ac0aa0eed4437d547c6f12c364d3006b42824 # v2.5.1
         with:
-          token: ${{ secrets.DOCR_PUSH_TOKEN }}
+          no_auth: true
       - name: Log in to DigitalOcean Container Registry
         env:
           DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DOCR_PUSH_TOKEN }}
@@ -211,7 +211,7 @@ jobs:
       - name: Install doctl
         uses: digitalocean/action-doctl@135ac0aa0eed4437d547c6f12c364d3006b42824 # v2.5.1
         with:
-          token: ${{ secrets.DO_FIREWALL_TOKEN }}
+          no_auth: true
       - name: Prepare SSH identity
         env:
           SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
