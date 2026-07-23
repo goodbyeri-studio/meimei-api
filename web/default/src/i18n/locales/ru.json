@@ -2802,6 +2802,7 @@
     "Name for this redemption code (1-20 characters)": "Имя для этого кода активации (1-20 символов)",
     "Name is available": "Имя доступно",
     "Name is not available": "Имя недоступно",
+    "Name must be 50 characters or fewer": "Название должно содержать не более 50 символов",
     "Name must be between {{min}} and {{max}} characters": "Имя должно быть длиной от {{min}} до {{max}} символов",
     "Name Rule": "Правило именования",
     "Name Suffix": "Суффикс имени",

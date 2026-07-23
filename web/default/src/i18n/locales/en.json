@@ -2802,6 +2802,7 @@
     "Name for this redemption code (1-20 characters)": "Name for this redemption code (1-20 characters)",
     "Name is available": "Name is available",
     "Name is not available": "Name is not available",
+    "Name must be 50 characters or fewer": "Name must be 50 characters or fewer",
     "Name must be between {{min}} and {{max}} characters": "Name must be between {{min}} and {{max}} characters",
     "Name Rule": "Name Rule",
     "Name Suffix": "Name Suffix",

@@ -2802,6 +2802,7 @@
     "Name for this redemption code (1-20 characters)": "Nom pour ce code d'échange (1-20 caractères)",
     "Name is available": "Nom disponible",
     "Name is not available": "Nom non disponible",
+    "Name must be 50 characters or fewer": "Le nom ne doit pas dépasser 50 caractères",
     "Name must be between {{min}} and {{max}} characters": "Le nom doit contenir entre {{min}} et {{max}} caractères",
     "Name Rule": "Règle de nommage",
     "Name Suffix": "Suffixe du nom",

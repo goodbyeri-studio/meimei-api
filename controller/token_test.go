@@ -625,3 +625,97 @@ func TestUpdateTokenRejectsUnavailableGroup(t *testing.T) {
 	require.NoError(t, db.First(token, token.Id).Error)
 	assert.Equal(t, "default", token.Group)
 }
+
+func TestAddTokenRejectsDuplicateNameForSameUser(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	seedToken(t, db, 42, "grok", "existing-grok-key")
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/", map[string]any{
+		"name":            "  grok  ",
+		"expired_time":    -1,
+		"remain_quota":    0,
+		"unlimited_quota": true,
+		"group":           "default",
+	}, 42)
+	AddToken(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	assert.False(t, response.Success)
+	assert.Contains(t, response.Message, "name")
+	var count int64
+	require.NoError(t, db.Model(&model.Token{}).Where("user_id = ?", 42).Count(&count).Error)
+	assert.Equal(t, int64(1), count)
+}
+
+func TestTokenNamesAreScopedToUserAndDeletedNamesCanBeReused(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	seedToken(t, db, 42, "shared-name", "user-one-key")
+
+	otherUserCtx, otherUserRecorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/", map[string]any{
+		"name":            "shared-name",
+		"expired_time":    -1,
+		"remain_quota":    0,
+		"unlimited_quota": true,
+		"group":           "default",
+	}, 43)
+	AddToken(otherUserCtx)
+	assert.True(t, decodeAPIResponse(t, otherUserRecorder).Success)
+
+	deleted := seedToken(t, db, 42, "reusable-name", "deleted-name-key")
+	require.NoError(t, deleted.Delete())
+	reuseCtx, reuseRecorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/", map[string]any{
+		"name":            "reusable-name",
+		"expired_time":    -1,
+		"remain_quota":    0,
+		"unlimited_quota": true,
+		"group":           "default",
+	}, 42)
+	AddToken(reuseCtx)
+	assert.True(t, decodeAPIResponse(t, reuseRecorder).Success)
+}
+
+func TestUpdateTokenRejectsDuplicateNameButAllowsCurrentName(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	first := seedToken(t, db, 42, "first-name", "first-token-key")
+	second := seedToken(t, db, 42, "second-name", "second-token-key")
+
+	conflictCtx, conflictRecorder := newAuthenticatedContext(t, http.MethodPut, "/api/token/", map[string]any{
+		"id":              second.Id,
+		"name":            " first-name ",
+		"expired_time":    -1,
+		"remain_quota":    0,
+		"unlimited_quota": true,
+		"group":           "default",
+	}, 42)
+	UpdateToken(conflictCtx)
+	assert.False(t, decodeAPIResponse(t, conflictRecorder).Success)
+
+	unchangedCtx, unchangedRecorder := newAuthenticatedContext(t, http.MethodPut, "/api/token/", map[string]any{
+		"id":              first.Id,
+		"name":            " first-name ",
+		"expired_time":    -1,
+		"remain_quota":    0,
+		"unlimited_quota": true,
+		"group":           "default",
+	}, 42)
+	UpdateToken(unchangedCtx)
+	assert.True(t, decodeAPIResponse(t, unchangedRecorder).Success)
+	require.NoError(t, db.First(first, first.Id).Error)
+	assert.Equal(t, "first-name", first.Name)
+}
+
+func TestUpdateTokenStatusOnlySkipsNameValidation(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	token := seedToken(t, db, 42, "status-name", "status-token-key")
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPut, "/api/token/?status_only=1", map[string]any{
+		"id":     token.Id,
+		"status": common.TokenStatusDisabled,
+	}, 42)
+	UpdateToken(ctx)
+
+	assert.True(t, decodeAPIResponse(t, recorder).Success)
+	require.NoError(t, db.First(token, token.Id).Error)
+	assert.Equal(t, common.TokenStatusDisabled, token.Status)
+	assert.Equal(t, "status-name", token.Name)
+}
