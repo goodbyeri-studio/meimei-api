@@ -25,8 +25,9 @@ import type {
   Row,
 } from '@tanstack/react-table'
 import { Eye, EyeOff } from 'lucide-react'
-import { useState, useMemo, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import {
   DISABLED_ROW_DESKTOP,
@@ -43,7 +44,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { getSystemOptions } from '@/features/system-settings/api'
-import { safeJsonParse } from '@/features/system-settings/utils/json-parser'
 import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { getLobeIcon } from '@/lib/lobe-icon'
@@ -56,12 +56,14 @@ import {
   CHANNEL_STATUS,
   CHANNEL_STATUS_OPTIONS,
 } from '../constants'
+import { useUpdateGroupRatio } from '../hooks/use-update-group-ratio'
 import {
   channelsQueryKeys,
   aggregateChannelsByTag,
   isTagAggregateRow,
   getChannelTypeIcon,
   getChannelTypeLabel,
+  parseGroupRatiosOption,
 } from '../lib'
 import type { Channel, ChannelSortBy } from '../types'
 import { ChannelCard } from './channel-card'
@@ -103,22 +105,47 @@ export function ChannelsTable() {
   const currentUser = useAuthStore((state) => state.auth.user)
   const canEditGroupRatios = currentUser?.role === ROLE.SUPER_ADMIN
 
-  const { data: systemOptions, isLoading: isLoadingSystemOptions } = useQuery({
+  const {
+    data: systemOptions,
+    isLoading: isLoadingSystemOptions,
+    isSuccess: isSystemOptionsSuccess,
+  } = useQuery({
     queryKey: ['system-options'],
     queryFn: getSystemOptions,
     staleTime: 5 * 60 * 1000,
     enabled: canEditGroupRatios,
   })
-  const groupRatios = useMemo(() => {
+  const parsedGroupRatios = useMemo(() => {
     const value = systemOptions?.data?.find(
       (option) => option.key === 'GroupRatio'
     )?.value
-    return safeJsonParse<Record<string, number>>(value, {
-      fallback: {},
-      silent: true,
-    })
+    return parseGroupRatiosOption(value)
   }, [systemOptions?.data])
-  const groupRatiosReady = canEditGroupRatios && !isLoadingSystemOptions
+  const groupRatios = parsedGroupRatios.ratios
+  const groupRatiosReady =
+    canEditGroupRatios &&
+    !isLoadingSystemOptions &&
+    isSystemOptionsSuccess &&
+    parsedGroupRatios.valid
+  const groupRatiosUnavailable =
+    canEditGroupRatios &&
+    !isLoadingSystemOptions &&
+    (!isSystemOptionsSuccess || !parsedGroupRatios.valid)
+  const { mutateAsync: updateGroupRatio, isPending: isSavingGroupRatio } =
+    useUpdateGroupRatio()
+  const saveGroupRatio = useCallback(
+    async (group: string, ratio: number) => {
+      const response = await updateGroupRatio({ group, ratio })
+      return response.success
+    },
+    [updateGroupRatio]
+  )
+
+  useEffect(() => {
+    if (groupRatiosUnavailable) {
+      toast.error(`${t('Group ratios')}: ${t('Failed to load')}`)
+    }
+  }, [groupRatiosUnavailable, t])
 
   // Table state
   const [sorting, setSorting] = useState<SortingState>([])
@@ -331,6 +358,8 @@ export function ChannelsTable() {
     enableSelection: batchMode,
     groupRatios,
     canEditGroupRatios: groupRatiosReady,
+    saveGroupRatio,
+    isSavingGroupRatio,
   })
 
   // React Table instance
@@ -438,9 +467,9 @@ export function ChannelsTable() {
       columns={columns}
       isLoading={isLoading}
       isFetching={isFetching}
-      emptyTitle={t('No Groups Found')}
+      emptyTitle={t('No Channels Found')}
       emptyDescription={t(
-        'No groups available. Create your first group to get started.'
+        'No channels available. Create your first channel to get started.'
       )}
       skeletonKeyPrefix='channel-skeleton'
       enableCardView
@@ -451,6 +480,8 @@ export function ChannelsTable() {
           isSelected={isSelected}
           groupRatios={groupRatios}
           canEditGroupRatios={groupRatiosReady}
+          saveGroupRatio={saveGroupRatio}
+          isSavingGroupRatio={isSavingGroupRatio}
         />
       )}
       cardGridClassName='grid grid-cols-1 gap-2.5'

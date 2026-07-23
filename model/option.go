@@ -1,6 +1,8 @@
 package model
 
 import (
+	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -226,6 +228,64 @@ func UpdateOption(key string, value string) error {
 	DB.Save(&option)
 	// Update OptionMap
 	return updateOptionMap(key, value)
+}
+
+// UpdateGroupRatioAtomically updates one group ratio while serializing
+// concurrent administrators on the GroupRatio option row.
+func UpdateGroupRatioAtomically(group string, ratio float64) (map[string]float64, error) {
+	group = strings.TrimSpace(group)
+	if group == "" {
+		return nil, fmt.Errorf("group cannot be empty")
+	}
+	if math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio < 0 {
+		return nil, fmt.Errorf("group ratio must be a finite number greater than or equal to 0")
+	}
+
+	var ratios map[string]float64
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		option := Option{Key: "GroupRatio"}
+		if err := lockForUpdate(tx).Where("key = ?", option.Key).First(&option).Error; err != nil {
+			if err != gorm.ErrRecordNotFound {
+				return err
+			}
+			ratioJSON, marshalErr := common.Marshal(map[string]float64{})
+			if marshalErr != nil {
+				return marshalErr
+			}
+			option.Value = string(ratioJSON)
+		}
+
+		ratios = make(map[string]float64)
+		if strings.TrimSpace(option.Value) != "" {
+			if err := common.Unmarshal([]byte(option.Value), &ratios); err != nil {
+				return fmt.Errorf("invalid GroupRatio configuration: %w", err)
+			}
+		}
+		for name, value := range ratios {
+			if strings.TrimSpace(name) == "" || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+				return fmt.Errorf("invalid GroupRatio configuration for %q", name)
+			}
+		}
+		ratios[group] = ratio
+		valueJSON, err := common.Marshal(ratios)
+		if err != nil {
+			return err
+		}
+		option.Value = string(valueJSON)
+		return tx.Save(&option).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	valueJSON, err := common.Marshal(ratios)
+	if err != nil {
+		return nil, err
+	}
+	if err := updateOptionMap("GroupRatio", string(valueJSON)); err != nil {
+		return nil, err
+	}
+	return ratios, nil
 }
 
 // UpdateOptionsBulk persists multiple key/value pairs in a single database

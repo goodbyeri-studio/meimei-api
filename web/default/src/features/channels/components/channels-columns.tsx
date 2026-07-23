@@ -87,6 +87,7 @@ import { EditableGroupRatioBadge } from './editable-group-ratio-badge'
 import { NumericSpinnerInput } from './numeric-spinner-input'
 
 const EMPTY_GROUP_RATIOS: Record<string, number> = {}
+const NOOP_SAVE_GROUP_RATIO = async () => false
 
 function parseIonetMeta(otherInfo: string | null | undefined): null | {
   source?: string
@@ -519,6 +520,8 @@ export function useChannelsColumns(
     enableSelection?: boolean
     groupRatios?: Record<string, number>
     canEditGroupRatios?: boolean
+    saveGroupRatio?: (group: string, ratio: number) => Promise<boolean>
+    isSavingGroupRatio?: boolean
   } = {}
 ): ColumnDef<Channel>[] {
   const { t, i18n } = useTranslation()
@@ -526,6 +529,8 @@ export function useChannelsColumns(
   const enableSelection = options.enableSelection ?? true
   const groupRatios = options.groupRatios ?? EMPTY_GROUP_RATIOS
   const canEditGroupRatios = options.canEditGroupRatios ?? false
+  const saveGroupRatio = options.saveGroupRatio ?? NOOP_SAVE_GROUP_RATIO
+  const isSavingGroupRatio = options.isSavingGroupRatio ?? false
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   // The column definitions only depend on the translation function, the active
   // locale, and sensitive-data visibility. Memoizing keeps the array (and every
@@ -1002,9 +1007,10 @@ export function useChannelsColumns(
                   key={g}
                   group={g}
                   label={sensitiveVisible ? undefined : SENSITIVE_MASK}
-                  ratio={sensitiveVisible ? groupRatios[g] : null}
-                  groupRatios={groupRatios}
+                  ratio={sensitiveVisible ? (groupRatios[g] ?? 1) : null}
                   editable={canEditGroupRatios && sensitiveVisible}
+                  onSave={saveGroupRatio}
+                  isSaving={isSavingGroupRatio}
                 />
               ))}
             />
@@ -1168,6 +1174,8 @@ export function useChannelsColumns(
       sensitiveVisible,
       groupRatios,
       canEditGroupRatios,
+      saveGroupRatio,
+      isSavingGroupRatio,
     ]
   )
 }

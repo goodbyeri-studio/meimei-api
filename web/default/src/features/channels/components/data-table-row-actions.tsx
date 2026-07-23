@@ -189,7 +189,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
               size='icon-sm'
               onClick={handleDirectTest}
               disabled={isTesting}
-              aria-label={t('Test Group Connection')}
+              aria-label={t('Test Connection')}
             />
           }
         >
@@ -199,7 +199,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
             <Gauge className='size-4' />
           )}
         </TooltipTrigger>
-        <TooltipContent>{t('Test Group Connection')}</TooltipContent>
+        <TooltipContent>{t('Test Connection')}</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -241,7 +241,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         <DropdownMenuContent align='end' className='w-48'>
           {/* Test Connection */}
           <DropdownMenuItem onClick={handleTest}>
-            {t('Test Group Connection')}
+            {t('Test Connection')}
             <DropdownMenuShortcut>
               <PlugZap size={16} />
             </DropdownMenuShortcut>
@@ -302,12 +302,12 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
 
           <DropdownMenuSeparator />
 
-          {/* Copy Group */}
+          {/* Copy Channel */}
           <DropdownMenuItem
             disabled={!canEditSensitive}
             onClick={canEditSensitive ? handleCopy : undefined}
           >
-            {t('Copy Group')}
+            {t('Copy Channel')}
             <DropdownMenuShortcut>
               <Copy size={16} />
             </DropdownMenuShortcut>
@@ -351,9 +351,9 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
       <ConfirmDialog
         open={deleteConfirmOpen}
         onOpenChange={setDeleteConfirmOpen}
-        title={t('Delete Group')}
+        title={t('Delete Channel')}
         desc={t(
-          'Are you sure you want to delete group "{{name}}"? This action cannot be undone.',
+          'Are you sure you want to delete channel "{{name}}"? This action cannot be undone.',
           { name: channel.name }
         )}
         confirmText={t('Delete')}

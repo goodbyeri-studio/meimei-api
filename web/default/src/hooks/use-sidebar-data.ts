@@ -88,7 +88,7 @@ export function useSidebarData(): SidebarData {
         title: t('Admin'),
         items: [
           {
-            title: t('Groups'),
+            title: t('Channels'),
             url: '/channels',
             icon: Radio,
           },

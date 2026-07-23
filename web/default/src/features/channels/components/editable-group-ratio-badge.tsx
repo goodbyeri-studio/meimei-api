@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQueryClient } from '@tanstack/react-query'
 import { Loader2, Save, X } from 'lucide-react'
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -33,15 +32,14 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { useUpdateOption } from '@/features/system-settings/hooks/use-update-option'
-import type { SystemOptionsResponse } from '@/features/system-settings/types'
 
 type EditableGroupRatioBadgeProps = {
   group: string
   ratio?: number | null
-  groupRatios: Record<string, number>
   editable: boolean
   label?: string
+  onSave: (group: string, ratio: number) => Promise<boolean>
+  isSaving: boolean
 }
 
 export function EditableGroupRatioBadge(props: EditableGroupRatioBadgeProps) {
@@ -49,11 +47,9 @@ export function EditableGroupRatioBadge(props: EditableGroupRatioBadgeProps) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const updateOption = useUpdateOption()
-  const queryClient = useQueryClient()
   const inputId = useId()
 
-  const displayRatio = props.ratio ?? (props.editable ? 1 : null)
+  const displayRatio = props.ratio ?? null
   const badge = (
     <GroupBadge
       group={props.group}
@@ -76,7 +72,7 @@ export function EditableGroupRatioBadge(props: EditableGroupRatioBadgeProps) {
   }
 
   const handleSave = async () => {
-    if (updateOption.isPending) return
+    if (props.isSaving) return
 
     const value = Number(draft.trim())
     if (draft.trim() === '' || !Number.isFinite(value)) {
@@ -88,37 +84,9 @@ export function EditableGroupRatioBadge(props: EditableGroupRatioBadgeProps) {
       return
     }
 
-    const nextRatios = {
-      ...props.groupRatios,
-      [props.group]: value,
-    }
-    const serializedRatios = JSON.stringify(nextRatios)
     try {
-      const result = await updateOption.mutateAsync({
-        key: 'GroupRatio',
-        value: serializedRatios,
-      })
-      if (result.success) {
-        queryClient.setQueryData<SystemOptionsResponse>(
-          ['system-options'],
-          (current) => {
-            if (!current) return current
-            const hasGroupRatio = current.data.some(
-              (option) => option.key === 'GroupRatio'
-            )
-            const data = hasGroupRatio
-              ? current.data.map((option) =>
-                  option.key === 'GroupRatio'
-                    ? { ...option, value: serializedRatios }
-                    : option
-                )
-              : [
-                  ...current.data,
-                  { key: 'GroupRatio', value: serializedRatios },
-                ]
-            return { ...current, data }
-          }
-        )
+      const success = await props.onSave(props.group, value)
+      if (success) {
         setOpen(false)
       }
     } catch {
@@ -184,7 +152,7 @@ export function EditableGroupRatioBadge(props: EditableGroupRatioBadgeProps) {
             variant='ghost'
             size='sm'
             onClick={() => setOpen(false)}
-            disabled={updateOption.isPending}
+            disabled={props.isSaving}
           >
             <X className='size-4' />
             {t('Cancel')}
@@ -193,9 +161,9 @@ export function EditableGroupRatioBadge(props: EditableGroupRatioBadgeProps) {
             type='button'
             size='sm'
             onClick={() => void handleSave()}
-            disabled={updateOption.isPending}
+            disabled={props.isSaving}
           >
-            {updateOption.isPending ? (
+            {props.isSaving ? (
               <Loader2 className='size-4 animate-spin' />
             ) : (
               <Save className='size-4' />

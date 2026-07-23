@@ -35,11 +35,15 @@ function ChannelCardComponent({
   isSelected,
   groupRatios,
   canEditGroupRatios,
+  saveGroupRatio,
+  isSavingGroupRatio,
 }: {
   row: Row<Channel>
   isSelected: boolean
   groupRatios: Record<string, number>
   canEditGroupRatios: boolean
+  saveGroupRatio: (group: string, ratio: number) => Promise<boolean>
+  isSavingGroupRatio: boolean
 }) {
   const { t } = useTranslation()
   const { sensitiveVisible } = useChannels()
@@ -114,9 +118,10 @@ function ChannelCardComponent({
                   key={group}
                   group={group}
                   label={sensitiveVisible ? undefined : SENSITIVE_MASK}
-                  ratio={sensitiveVisible ? groupRatios[group] : null}
-                  groupRatios={groupRatios}
+                  ratio={sensitiveVisible ? (groupRatios[group] ?? 1) : null}
                   editable={canEditGroupRatios && sensitiveVisible}
+                  onSave={saveGroupRatio}
+                  isSaving={isSavingGroupRatio}
                 />
               ))
             ) : (

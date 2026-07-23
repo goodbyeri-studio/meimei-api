@@ -147,7 +147,7 @@ export function ChannelsPrimaryButtons() {
           />
         </div>
 
-        {/* Create Group */}
+        {/* Create Channel */}
         <Tooltip>
           <TooltipTrigger render={<span className='inline-flex' />}>
             <Button
@@ -160,7 +160,7 @@ export function ChannelsPrimaryButtons() {
               disabled={!canEditSensitive}
             >
               <Plus className='h-4 w-4' />
-              <span className='max-sm:hidden'>{t('Create Group')}</span>
+              <span className='max-sm:hidden'>{t('Create Channel')}</span>
               <span className='sm:hidden'>{t('Create')}</span>
             </Button>
           </TooltipTrigger>
@@ -212,7 +212,7 @@ export function ChannelsPrimaryButtons() {
                 handleTestAllChannels(queryClient)
               }}
             >
-              {t('Test All Groups')}
+              {t('Test All Channels')}
               <DropdownMenuShortcut>
                 <TestTube className='h-4 w-4' />
               </DropdownMenuShortcut>
@@ -259,7 +259,7 @@ export function ChannelsPrimaryButtons() {
                 setShowConsistencyDialog(true)
               }}
             >
-              {t('Repair Group Consistency')}
+              {t('Repair Channel Consistency')}
               <DropdownMenuShortcut>
                 <Settings2 className='h-4 w-4' />
               </DropdownMenuShortcut>
@@ -288,9 +288,9 @@ export function ChannelsPrimaryButtons() {
       <ConfirmDialog
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
-        title={t('Delete All Disabled Groups')}
+        title={t('Delete All Disabled Channels?')}
         desc={t(
-          'This will permanently delete all manually and automatically disabled groups. This action cannot be undone.'
+          'This will permanently delete all manually and automatically disabled channels. This action cannot be undone.'
         )}
         destructive
         handleConfirm={() => {
@@ -306,9 +306,9 @@ export function ChannelsPrimaryButtons() {
       <ConfirmDialog
         open={showConsistencyDialog}
         onOpenChange={setShowConsistencyDialog}
-        title={t('Repair group consistency?')}
+        title={t('Repair channel consistency?')}
         desc={t(
-          'This will rebuild the group routing index from every group configuration, including supported models, priorities, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?'
+          'This will rebuild the channel routing index from every channel configuration, including supported models, groups, priorities, and weights. Routing may be briefly incomplete while the rebuild is running. Continue?'
         )}
         confirmText={t('Repair')}
         isLoading={isRepairingConsistency}

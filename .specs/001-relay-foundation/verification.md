@@ -31,6 +31,7 @@
 | 2026-07-23 | 本地完整镜像构建 | `docker compose -f docker-compose.yml -f docker-compose.local.yml build new-api` | 通过 | default/classic 前端产物与 Go 后端均构建完成，生成 `meimei-api:local` |
 | 2026-07-24 | CI 与生产发布 workflow | `actionlint`; `bash -n`; production Compose `config --quiet`; `go test ./...`; default/classic build | 通过 | Action 固定到 commit SHA；PR CI 不读取 Secret；production 仅手动固定 SHA/digest；安全审计为非阻塞告警 |
 | 2026-07-24 | 生产镜像与健康端点 | `docker buildx build --platform linux/amd64 --load`; 临时容器请求 `/healthz/live`、`/healthz/ready` | 通过 | 镜像 `sha256:4c1bdc9b027e96a6997d4e6d5780e4bc2590b1c8047186d27d6df305e8453fb3`；SQLite/Redis-disabled 验证环境中两个端点均返回 `200` |
+| 2026-07-24 | 渠道分组倍率生产加固 | `go test ./model ./controller -count=1`；`bun test src/features/channels/lib/group-ratios.test.ts`；`bun run typecheck`；相关文件 `oxlint`、`oxfmt --check`；`bun run build`；`git diff --check` | 通过 | 单分组倍率使用事务和行锁合并更新，避免并发管理员以旧整表覆盖；配置读取失败或结构异常时禁止前端编辑；default production build 通过 |
 | YYYY-MM-DD | Cloud/Relay contract | token + usage integration tests | 未跑 | 尚无企业合同实现 |
 | YYYY-MM-DD | WORK/CODE E2E | 真实授权模型渠道 | 未跑 | 发布门槛 |
 
