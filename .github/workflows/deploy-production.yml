@@ -169,7 +169,9 @@ jobs:
             echo '::error::build did not return a valid sha256 image digest'
             exit 1
           }
-          echo "image_ref=$IMAGE_TAG@$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
+          # The host-side deploy script deliberately accepts only the immutable
+          # registry digest form (without a mutable tag).
+          echo "image_ref=${IMAGE_TAG%%:*}@$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
 
   deploy:
     name: Deploy to production host
