@@ -519,6 +519,15 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 			}
 		}
 	}
+	if isAdd {
+		candidate := *channel
+		if candidate.Status == 0 {
+			candidate.Status = common.ChannelStatusEnabled
+		}
+		if err := model.ValidateDeepKeyChannelGroupIsolation(&candidate); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -1047,6 +1056,12 @@ func UpdateChannel(c *gin.Context) {
 			// 覆盖模式：直接使用新密钥（默认行为，不需要特殊处理）
 		}
 	}
+	candidate := channel.Channel
+	candidate.Status = originChannel.Status
+	if err := model.ValidateDeepKeyChannelGroupIsolation(&candidate); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	err = channel.Update()
 	if err != nil {
 		common.ApiError(c, err)
@@ -1097,6 +1112,12 @@ func UpdateChannelStatus(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
+	if req.Status == common.ChannelStatusEnabled {
+		if err := model.ValidateDeepKeyChannelsForEnable([]int{id}); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
 	changed := model.UpdateChannelStatus(id, "", req.Status, "manual operation")
 	if changed {
 		model.InitChannelCache()
@@ -1119,6 +1140,12 @@ func BatchUpdateChannelStatus(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil || len(req.Ids) == 0 || !isManageableChannelStatus(req.Status) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
+	}
+	if req.Status == common.ChannelStatusEnabled {
+		if err := model.ValidateDeepKeyChannelsForEnable(req.Ids); err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	}
 	changedCount := 0
 	for _, id := range req.Ids {
