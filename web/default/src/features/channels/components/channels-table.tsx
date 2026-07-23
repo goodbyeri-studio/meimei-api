@@ -42,9 +42,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { getSystemOptions } from '@/features/system-settings/api'
+import { safeJsonParse } from '@/features/system-settings/utils/json-parser'
 import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { getLobeIcon } from '@/lib/lobe-icon'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { getChannels, searchChannels, getGroups } from '../api'
 import {
@@ -96,6 +100,25 @@ export function ChannelsTable() {
     setSensitiveVisible,
   } = useChannels()
   const isMobile = useMediaQuery('(max-width: 640px)')
+  const currentUser = useAuthStore((state) => state.auth.user)
+  const canEditGroupRatios = currentUser?.role === ROLE.SUPER_ADMIN
+
+  const { data: systemOptions, isLoading: isLoadingSystemOptions } = useQuery({
+    queryKey: ['system-options'],
+    queryFn: getSystemOptions,
+    staleTime: 5 * 60 * 1000,
+    enabled: canEditGroupRatios,
+  })
+  const groupRatios = useMemo(() => {
+    const value = systemOptions?.data?.find(
+      (option) => option.key === 'GroupRatio'
+    )?.value
+    return safeJsonParse<Record<string, number>>(value, {
+      fallback: {},
+      silent: true,
+    })
+  }, [systemOptions?.data])
+  const groupRatiosReady = canEditGroupRatios && !isLoadingSystemOptions
 
   // Table state
   const [sorting, setSorting] = useState<SortingState>([])
@@ -304,7 +327,11 @@ export function ChannelsTable() {
   const typeCounts = data?.data?.type_counts
 
   // Columns configuration
-  const columns = useChannelsColumns({ enableSelection: batchMode })
+  const columns = useChannelsColumns({
+    enableSelection: batchMode,
+    groupRatios,
+    canEditGroupRatios: groupRatiosReady,
+  })
 
   // React Table instance
   const { table } = useDataTable({
@@ -419,9 +446,14 @@ export function ChannelsTable() {
       enableCardView
       viewModeStorageKey={CHANNELS_VIEW_MODE_STORAGE_KEY}
       renderCard={(row, { isSelected }) => (
-        <ChannelCard row={row} isSelected={isSelected} />
+        <ChannelCard
+          row={row}
+          isSelected={isSelected}
+          groupRatios={groupRatios}
+          canEditGroupRatios={groupRatiosReady}
+        />
       )}
-      cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3'
+      cardGridClassName='grid grid-cols-1 gap-2.5'
       applyHeaderSize
       toolbarProps={{
         searchPlaceholder: t('Filter by name, ID, or key...'),
