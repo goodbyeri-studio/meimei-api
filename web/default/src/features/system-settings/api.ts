@@ -28,6 +28,8 @@ import type {
   SystemTaskResponse,
   UpdateOptionRequest,
   UpdateOptionResponse,
+  UpdateGroupRatioRequest,
+  UpdateGroupRatioResponse,
   UpstreamChannelsResponse,
   UpstreamRatiosResponse,
 } from './types'
@@ -39,6 +41,14 @@ export async function getSystemOptions() {
 
 export async function updateSystemOption(request: UpdateOptionRequest) {
   const res = await api.put<UpdateOptionResponse>('/api/option/', request)
+  return res.data
+}
+
+export async function updateGroupRatio(request: UpdateGroupRatioRequest) {
+  const res = await api.put<UpdateGroupRatioResponse>(
+    '/api/option/group-ratio',
+    request
+  )
   return res.data
 }
 

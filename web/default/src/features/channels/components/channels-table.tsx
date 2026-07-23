@@ -25,8 +25,9 @@ import type {
   Row,
 } from '@tanstack/react-table'
 import { Eye, EyeOff } from 'lucide-react'
-import { useState, useMemo, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import {
   DISABLED_ROW_DESKTOP,
@@ -42,9 +43,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { getSystemOptions } from '@/features/system-settings/api'
 import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { getLobeIcon } from '@/lib/lobe-icon'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { getChannels, searchChannels, getGroups } from '../api'
 import {
@@ -52,12 +56,14 @@ import {
   CHANNEL_STATUS,
   CHANNEL_STATUS_OPTIONS,
 } from '../constants'
+import { useUpdateGroupRatio } from '../hooks/use-update-group-ratio'
 import {
   channelsQueryKeys,
   aggregateChannelsByTag,
   isTagAggregateRow,
   getChannelTypeIcon,
   getChannelTypeLabel,
+  parseGroupRatiosOption,
 } from '../lib'
 import type { Channel, ChannelSortBy } from '../types'
 import { ChannelCard } from './channel-card'
@@ -96,6 +102,50 @@ export function ChannelsTable() {
     setSensitiveVisible,
   } = useChannels()
   const isMobile = useMediaQuery('(max-width: 640px)')
+  const currentUser = useAuthStore((state) => state.auth.user)
+  const canEditGroupRatios = currentUser?.role === ROLE.SUPER_ADMIN
+
+  const {
+    data: systemOptions,
+    isLoading: isLoadingSystemOptions,
+    isSuccess: isSystemOptionsSuccess,
+  } = useQuery({
+    queryKey: ['system-options'],
+    queryFn: getSystemOptions,
+    staleTime: 5 * 60 * 1000,
+    enabled: canEditGroupRatios,
+  })
+  const parsedGroupRatios = useMemo(() => {
+    const value = systemOptions?.data?.find(
+      (option) => option.key === 'GroupRatio'
+    )?.value
+    return parseGroupRatiosOption(value)
+  }, [systemOptions?.data])
+  const groupRatios = parsedGroupRatios.ratios
+  const groupRatiosReady =
+    canEditGroupRatios &&
+    !isLoadingSystemOptions &&
+    isSystemOptionsSuccess &&
+    parsedGroupRatios.valid
+  const groupRatiosUnavailable =
+    canEditGroupRatios &&
+    !isLoadingSystemOptions &&
+    (!isSystemOptionsSuccess || !parsedGroupRatios.valid)
+  const { mutateAsync: updateGroupRatio, isPending: isSavingGroupRatio } =
+    useUpdateGroupRatio()
+  const saveGroupRatio = useCallback(
+    async (group: string, ratio: number) => {
+      const response = await updateGroupRatio({ group, ratio })
+      return response.success
+    },
+    [updateGroupRatio]
+  )
+
+  useEffect(() => {
+    if (groupRatiosUnavailable) {
+      toast.error(`${t('Group ratios')}: ${t('Failed to load')}`)
+    }
+  }, [groupRatiosUnavailable, t])
 
   // Table state
   const [sorting, setSorting] = useState<SortingState>([])
@@ -304,7 +354,13 @@ export function ChannelsTable() {
   const typeCounts = data?.data?.type_counts
 
   // Columns configuration
-  const columns = useChannelsColumns({ enableSelection: batchMode })
+  const columns = useChannelsColumns({
+    enableSelection: batchMode,
+    groupRatios,
+    canEditGroupRatios: groupRatiosReady,
+    saveGroupRatio,
+    isSavingGroupRatio,
+  })
 
   // React Table instance
   const { table } = useDataTable({
@@ -419,9 +475,16 @@ export function ChannelsTable() {
       enableCardView
       viewModeStorageKey={CHANNELS_VIEW_MODE_STORAGE_KEY}
       renderCard={(row, { isSelected }) => (
-        <ChannelCard row={row} isSelected={isSelected} />
+        <ChannelCard
+          row={row}
+          isSelected={isSelected}
+          groupRatios={groupRatios}
+          canEditGroupRatios={groupRatiosReady}
+          saveGroupRatio={saveGroupRatio}
+          isSavingGroupRatio={isSavingGroupRatio}
+        />
       )}
-      cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3'
+      cardGridClassName='grid grid-cols-1 gap-2.5'
       applyHeaderSize
       toolbarProps={{
         searchPlaceholder: t('Filter by name, ID, or key...'),

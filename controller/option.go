@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -115,6 +116,35 @@ func GetOptions(c *gin.Context) {
 type OptionUpdateRequest struct {
 	Key   string `json:"key"`
 	Value any    `json:"value"`
+}
+
+type GroupRatioUpdateRequest struct {
+	Group string   `json:"group"`
+	Ratio *float64 `json:"ratio"`
+}
+
+func UpdateGroupRatio(c *gin.Context) {
+	var request GroupRatioUpdateRequest
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil ||
+		strings.TrimSpace(request.Group) == "" || request.Ratio == nil ||
+		math.IsNaN(*request.Ratio) || math.IsInf(*request.Ratio, 0) || *request.Ratio < 0 {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	ratios, err := model.UpdateGroupRatioAtomically(request.Group, *request.Ratio)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	recordManageAudit(c, "option.group_ratio.update", map[string]interface{}{
+		"group": strings.TrimSpace(request.Group),
+		"ratio": *request.Ratio,
+	})
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    ratios,
+	})
 }
 
 func UpdateOption(c *gin.Context) {

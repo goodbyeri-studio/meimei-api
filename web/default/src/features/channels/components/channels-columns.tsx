@@ -33,7 +33,6 @@ import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { BadgeListCell } from '@/components/data-table'
-import { GroupBadge } from '@/components/group-badge'
 import { ProviderBadge } from '@/components/provider-badge'
 import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
 import { TableId } from '@/components/table-id'
@@ -46,12 +45,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { toIntlLocale } from '@/i18n/languages'
 import {
   formatCurrencyFromUSD,
   formatQuotaWithCurrency,
   getCurrencyLabel,
 } from '@/lib/currency'
-import { toIntlLocale } from '@/i18n/languages'
 import { formatTimestampToDate } from '@/lib/format'
 import { truncateText } from '@/lib/utils'
 
@@ -84,7 +83,11 @@ import {
   CodexUsageDialog,
   type CodexUsageDialogData,
 } from './dialogs/codex-usage-dialog'
+import { EditableGroupRatioBadge } from './editable-group-ratio-badge'
 import { NumericSpinnerInput } from './numeric-spinner-input'
+
+const EMPTY_GROUP_RATIOS: Record<string, number> = {}
+const NOOP_SAVE_GROUP_RATIO = async () => false
 
 function parseIonetMeta(otherInfo: string | null | undefined): null | {
   source?: string
@@ -515,11 +518,19 @@ function BalanceCell({ channel }: { channel: Channel }) {
 export function useChannelsColumns(
   options: {
     enableSelection?: boolean
+    groupRatios?: Record<string, number>
+    canEditGroupRatios?: boolean
+    saveGroupRatio?: (group: string, ratio: number) => Promise<boolean>
+    isSavingGroupRatio?: boolean
   } = {}
 ): ColumnDef<Channel>[] {
   const { t, i18n } = useTranslation()
   const { sensitiveVisible } = useChannels()
   const enableSelection = options.enableSelection ?? true
+  const groupRatios = options.groupRatios ?? EMPTY_GROUP_RATIOS
+  const canEditGroupRatios = options.canEditGroupRatios ?? false
+  const saveGroupRatio = options.saveGroupRatio ?? NOOP_SAVE_GROUP_RATIO
+  const isSavingGroupRatio = options.isSavingGroupRatio ?? false
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   // The column definitions only depend on the translation function, the active
   // locale, and sensitive-data visibility. Memoizing keeps the array (and every
@@ -992,11 +1003,14 @@ export function useChannelsColumns(
           return (
             <BadgeListCell
               items={groupArray.map((g) => (
-                <GroupBadge
+                <EditableGroupRatioBadge
                   key={g}
                   group={g}
                   label={sensitiveVisible ? undefined : SENSITIVE_MASK}
-                  size='sm'
+                  ratio={sensitiveVisible ? (groupRatios[g] ?? 1) : null}
+                  editable={canEditGroupRatios && sensitiveVisible}
+                  onSave={saveGroupRatio}
+                  isSaving={isSavingGroupRatio}
                 />
               ))}
             />
@@ -1153,6 +1167,15 @@ export function useChannelsColumns(
         meta: { pinned: 'right' as const },
       },
     ],
-    [enableSelection, t, locale, sensitiveVisible]
+    [
+      enableSelection,
+      t,
+      locale,
+      sensitiveVisible,
+      groupRatios,
+      canEditGroupRatios,
+      saveGroupRatio,
+      isSavingGroupRatio,
+    ]
   )
 }

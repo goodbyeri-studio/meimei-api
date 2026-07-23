@@ -39,6 +39,17 @@ export type UpdateOptionResponse = {
   message: string
 }
 
+export type UpdateGroupRatioRequest = {
+  group: string
+  ratio: number
+}
+
+export type UpdateGroupRatioResponse = {
+  success: boolean
+  message: string
+  data?: Record<string, number>
+}
+
 export type DeepKeyGroupSyncResponse = {
   success: boolean
   message: string
