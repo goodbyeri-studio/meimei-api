@@ -438,9 +438,9 @@ export function ChannelsTable() {
       columns={columns}
       isLoading={isLoading}
       isFetching={isFetching}
-      emptyTitle={t('No Channels Found')}
+      emptyTitle={t('No Groups Found')}
       emptyDescription={t(
-        'No channels available. Create your first channel to get started.'
+        'No groups available. Create your first group to get started.'
       )}
       skeletonKeyPrefix='channel-skeleton'
       enableCardView

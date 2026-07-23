@@ -1854,7 +1854,7 @@ export function ChannelMutateDrawer({
                     <ChannelTypeLogo type={currentType} size={22} />
                   </IconBadge>
                   <span>
-                    {isEditing ? t('Edit Channel') : t('Create Channel')}
+                    {isEditing ? t('Edit Group') : t('Create Group')}
                     <span className='text-muted-foreground ml-2 text-sm font-normal'>
                       {t(currentTypeLabel)}
                     </span>
@@ -1941,7 +1941,7 @@ export function ChannelMutateDrawer({
                     providerLabel={t(currentTypeLabel)}
                     statusLabel={t(currentStatusLabel)}
                     progressLabel={progressLabel}
-                    navigationLabel={t('Channels')}
+                    navigationLabel={t('Groups')}
                     items={editorNavItems}
                     activeItemId={activeEditorSectionId}
                     expandedItemId={expandedEditorNavItemId}
@@ -4665,7 +4665,7 @@ export function ChannelMutateDrawer({
               {isSubmitting && (
                 <Loader2 className='mr-2 h-4 w-4 animate-spin' />
               )}
-              {isEditing ? t('Update Channel') : t('Save changes')}
+              {isEditing ? t('Update Group') : t('Save changes')}
             </Button>
           </SheetFooter>
         </SheetContent>

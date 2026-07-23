@@ -66,16 +66,6 @@ function ChannelCardComponent({
     }
   }
 
-  const baseUrl = row.original.base_url?.trim() || '-'
-  let endpoint = baseUrl
-  if (baseUrl !== '-') {
-    try {
-      endpoint = new URL(baseUrl).host || baseUrl
-    } catch {
-      endpoint = baseUrl
-    }
-  }
-
   const selectCell = renderCell('select')
   const typeCell = renderCell('type')
   const nameCell = renderCell('name')
@@ -95,7 +85,7 @@ function ChannelCardComponent({
     <ChannelRowActionsLayoutContext.Provider value='card'>
       <div
         data-state={isSelected ? 'selected' : undefined}
-        className='grid min-w-0 grid-cols-1 items-center gap-x-4 gap-y-4 sm:grid-cols-2 xl:grid-cols-[minmax(200px,1.25fr)_minmax(170px,1fr)_minmax(145px,.85fr)_minmax(190px,1fr)_auto]'
+        className='grid min-w-0 grid-cols-1 items-center gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-[minmax(190px,1.35fr)_minmax(190px,1.2fr)_minmax(135px,.9fr)_minmax(165px,1fr)_auto]'
       >
         <div className='min-w-0 sm:col-span-2 xl:col-span-1'>
           <div className='flex min-w-0 items-center gap-2'>
@@ -152,15 +142,6 @@ function ChannelCardComponent({
           <div className={labelClass}>{t('Used / Remaining')}</div>
           <div className='mt-2 min-h-5 min-w-0 overflow-hidden text-sm'>
             {balanceCell ?? <span className='text-muted-foreground'>-</span>}
-          </div>
-          <div className='mt-3 min-w-0'>
-            <div className={labelClass}>{t('Base URL')}</div>
-            <div
-              className='text-muted-foreground mt-1.5 truncate font-mono text-xs'
-              title={sensitiveVisible ? baseUrl : undefined}
-            >
-              {sensitiveVisible ? endpoint : SENSITIVE_MASK}
-            </div>
           </div>
         </div>
 
