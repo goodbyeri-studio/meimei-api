@@ -232,6 +232,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			ratioSyncRoute.GET("/channels", controller.GetSyncableChannels)
 			ratioSyncRoute.POST("/fetch", controller.FetchUpstreamRatios)
+			ratioSyncRoute.GET("/deepkey/groups/status", controller.GetDeepKeyGroupAdminStatuses)
 			ratioSyncRoute.POST("/deepkey/groups", controller.SyncDeepKeyGroups)
 			ratioSyncRoute.POST("/deepkey/migrate", controller.MigrateDeepKeyPricing)
 		}

@@ -60,6 +60,40 @@ export type DeepKeyGroupSyncResponse = {
   }
 }
 
+export type DeepKeyGroupIssue =
+  | 'not_in_catalog'
+  | 'missing_configuration'
+  | 'missing_channel'
+  | 'no_enabled_channel'
+  | 'invalid_key_configuration'
+  | 'ratio_drift'
+
+export type DeepKeyGroupAdminStatus = {
+  group: string
+  catalog_present: boolean
+  configured: boolean
+  catalog_ratio?: number
+  configured_ratio?: number
+  channel_count: number
+  enabled_channel_count: number
+  disabled_channel_count: number
+  model_count: number
+  token_count: number
+  key_fingerprint: string
+  key_configuration_valid: boolean
+  last_test_time: number
+  response_time: number
+  issues: DeepKeyGroupIssue[]
+}
+
+export type DeepKeyGroupAdminStatusResponse = {
+  success: boolean
+  message: string
+  data?: DeepKeyGroupAdminStatus[]
+  catalog_available?: boolean
+  catalog_error?: string
+}
+
 export type ConfirmPaymentComplianceResponse = {
   success: boolean
   message: string

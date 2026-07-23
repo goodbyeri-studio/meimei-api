@@ -57,6 +57,21 @@ func TestApplyDeepKeyPricingMigrationIsAtomicAndIdempotent(t *testing.T) {
 	unchanged, err := GetDeepKeyPricingMigrationSnapshot()
 	require.NoError(t, err)
 	assert.Equal(t, desiredRatio, unchanged.ModelRatio)
+
+	token := &Token{UserId: 1, Key: "sk-deepkey-migration-token", Group: "deepkey"}
+	require.NoError(t, DB.Create(token).Error)
+	t.Cleanup(func() { DB.Unscoped().Where("key = ?", token.Key).Delete(&Token{}) })
+	beforeBlocked, err := GetDeepKeyPricingMigrationSnapshot()
+	require.NoError(t, err)
+	blockedHash, err := beforeBlocked.Hash()
+	require.NoError(t, err)
+	err = ApplyDeepKeyPricingMigration(blockedHash, map[string]float64{"gpt": 88}, desiredPrice, map[string]float64{}, "blocked")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "deepkey")
+	unchanged, err = GetDeepKeyPricingMigrationSnapshot()
+	require.NoError(t, err)
+	assert.Equal(t, desiredRatio, unchanged.ModelRatio)
+	assert.Equal(t, desiredGroups, unchanged.GroupRatio)
 }
 
 func TestGetEnabledDeepKeyModelNamesIgnoresDisabledAndOtherChannels(t *testing.T) {
@@ -233,4 +248,52 @@ func TestEditChannelByTagRejectsInvalidDeepKeyGroup(t *testing.T) {
 	assert.Contains(t, err.Error(), "multiple upstream key configurations")
 	require.NoError(t, DB.First(&conflicting, conflicting.Id).Error)
 	assert.Equal(t, "edit-tag-original", conflicting.Group)
+}
+
+func TestGetDeepKeyChannelGroupStatusesRedactsKeysAndCountsTokens(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&Channel{}, &Token{}))
+	deepKeyURL := "https://deepkey.top"
+	channelNames := []string{"deepkey-status-enabled", "deepkey-status-disabled", "deepkey-status-duplicate"}
+	tokenKeys := []string{"sk-deepkey-status-token"}
+	t.Cleanup(func() {
+		DB.Where("name in ?", channelNames).Delete(&Channel{})
+		DB.Where("key in ?", tokenKeys).Delete(&Token{})
+	})
+	require.NoError(t, DB.Create(&[]Channel{
+		{Name: channelNames[0], Key: "upstream-secret-status", Status: common.ChannelStatusEnabled, BaseURL: &deepKeyURL, Models: "gpt-4o,image-1", Group: "status-group", TestTime: 123, ResponseTime: 42},
+		{Name: channelNames[1], Key: "upstream-secret-status", Status: common.ChannelStatusManuallyDisabled, BaseURL: &deepKeyURL, Models: "image-1", Group: "status-group"},
+		{Name: channelNames[2], Key: "duplicate-secret\nduplicate-secret", Status: common.ChannelStatusEnabled, BaseURL: &deepKeyURL, Models: "gpt-4o", Group: "duplicate-status-group"},
+	}).Error)
+	require.NoError(t, DB.Create(&Token{UserId: 1, Key: tokenKeys[0], Group: "status-group"}).Error)
+
+	statuses, err := GetDeepKeyChannelGroupStatuses()
+	require.NoError(t, err)
+	status, ok := statuses["status-group"]
+	require.True(t, ok)
+	assert.Equal(t, 2, status.ChannelCount)
+	assert.Equal(t, 1, status.EnabledChannelCount)
+	assert.Equal(t, 1, status.DisabledChannelCount)
+	assert.Equal(t, 2, status.ModelCount)
+	assert.Equal(t, int64(1), status.TokenCount)
+	assert.NotContains(t, status.KeyFingerprint, "upstream-secret-status")
+	assert.Len(t, status.KeyFingerprint, 16)
+	assert.True(t, status.KeyConfigurationValid)
+	assert.Equal(t, int64(123), status.LastTestTime)
+	assert.Equal(t, 42, status.ResponseTime)
+	assert.False(t, statuses["duplicate-status-group"].KeyConfigurationValid)
+}
+
+func TestCountTokensByGroupsFiltersRequestedGroups(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&Token{}))
+	tokenKeys := []string{"sk-count-status-a", "sk-count-status-b"}
+	t.Cleanup(func() { DB.Where("key in ?", tokenKeys).Delete(&Token{}) })
+	require.NoError(t, DB.Create(&[]Token{
+		{UserId: 1, Key: tokenKeys[0], Group: "count-a"},
+		{UserId: 1, Key: tokenKeys[1], Group: "count-b"},
+	}).Error)
+
+	counts, err := CountTokensByGroups([]string{"count-a"})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), counts["count-a"])
+	assert.NotContains(t, counts, "count-b")
 }

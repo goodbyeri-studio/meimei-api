@@ -60,6 +60,7 @@ import {
 } from '../components/settings-form-layout'
 import { SettingsPageActionsPortal } from '../components/settings-page-context'
 import { safeJsonParse } from '../utils/json-parser'
+import { DeepKeyGroupStatusPanel } from './deepkey-group-status-panel'
 import { GroupRatioVisualEditor } from './group-ratio-visual-editor'
 import { GroupSpecialUsableRulesEditor } from './group-special-usable-editor'
 
@@ -183,6 +184,8 @@ export const GroupRatioForm = memo(function GroupRatioForm({
         </SettingsPageActionsPortal>
         {editMode === 'visual' ? (
           <div className='space-y-6'>
+            <DeepKeyGroupStatusPanel />
+
             <GroupRatioVisualEditor
               groupRatio={form.watch('GroupRatio')}
               topupGroupRatio={form.watch('TopupGroupRatio')}

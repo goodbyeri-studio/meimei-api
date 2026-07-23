@@ -11,6 +11,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const DeepKeyPricingMigrationOption = "DeepKeyPricingMigration"
@@ -22,6 +23,19 @@ type DeepKeyPricingMigrationSnapshot struct {
 	ModelPrice map[string]float64 `json:"model_price"`
 	GroupRatio map[string]float64 `json:"group_ratio"`
 	Migration  string             `json:"migration"`
+}
+
+type DeepKeyChannelGroupStatus struct {
+	Group                 string `json:"group"`
+	ChannelCount          int    `json:"channel_count"`
+	EnabledChannelCount   int    `json:"enabled_channel_count"`
+	DisabledChannelCount  int    `json:"disabled_channel_count"`
+	ModelCount            int    `json:"model_count"`
+	TokenCount            int64  `json:"token_count"`
+	KeyFingerprint        string `json:"key_fingerprint"`
+	KeyConfigurationValid bool   `json:"key_configuration_valid"`
+	LastTestTime          int64  `json:"last_test_time"`
+	ResponseTime          int    `json:"response_time"`
 }
 
 func (snapshot DeepKeyPricingMigrationSnapshot) Hash() (string, error) {
@@ -57,15 +71,15 @@ func decodePricingMap(value string) (map[string]float64, error) {
 }
 
 func loadDeepKeyPricingMigrationSnapshot(tx *gorm.DB) (DeepKeyPricingMigrationSnapshot, error) {
+	groupRatioJSON, err := readPricingOption(tx, "GroupRatio")
+	if err != nil {
+		return DeepKeyPricingMigrationSnapshot{}, err
+	}
 	modelRatioJSON, err := readPricingOption(tx, "ModelRatio")
 	if err != nil {
 		return DeepKeyPricingMigrationSnapshot{}, err
 	}
 	modelPriceJSON, err := readPricingOption(tx, "ModelPrice")
-	if err != nil {
-		return DeepKeyPricingMigrationSnapshot{}, err
-	}
-	groupRatioJSON, err := readPricingOption(tx, "GroupRatio")
 	if err != nil {
 		return DeepKeyPricingMigrationSnapshot{}, err
 	}
@@ -157,6 +171,115 @@ func GetEnabledDeepKeyChannelGroups() (map[string]struct{}, error) {
 	return validateDeepKeyChannelSet(channels)
 }
 
+func GetDeepKeyChannelGroupStatuses() (map[string]DeepKeyChannelGroupStatus, error) {
+	var channels []Channel
+	if err := DB.Find(&channels).Error; err != nil {
+		return nil, err
+	}
+
+	statuses := make(map[string]DeepKeyChannelGroupStatus)
+	modelsByGroup := make(map[string]map[string]struct{})
+	keysByGroup := make(map[string]map[string]struct{})
+	keyConfigurationValidByGroup := make(map[string]bool)
+	for i := range channels {
+		channel := &channels[i]
+		if !IsDeepKeyBaseURL(channel.GetBaseURL()) {
+			continue
+		}
+		keys := make([]string, 0)
+		for _, key := range channel.GetKeys() {
+			key = strings.TrimSpace(key)
+			if key != "" {
+				keys = append(keys, key)
+			}
+		}
+		for _, group := range channel.GetGroups() {
+			group = strings.TrimSpace(group)
+			if group == "" {
+				continue
+			}
+			status := statuses[group]
+			status.Group = group
+			status.ChannelCount++
+			if channel.Status == common.ChannelStatusEnabled {
+				status.EnabledChannelCount++
+			} else {
+				status.DisabledChannelCount++
+			}
+			if channel.TestTime > status.LastTestTime {
+				status.LastTestTime = channel.TestTime
+				status.ResponseTime = channel.ResponseTime
+			}
+			statuses[group] = status
+
+			if modelsByGroup[group] == nil {
+				modelsByGroup[group] = make(map[string]struct{})
+			}
+			for _, modelName := range channel.GetModels() {
+				modelName = strings.TrimSpace(modelName)
+				if modelName != "" {
+					modelsByGroup[group][modelName] = struct{}{}
+				}
+			}
+			if keysByGroup[group] == nil {
+				keysByGroup[group] = make(map[string]struct{})
+				keyConfigurationValidByGroup[group] = true
+			}
+			if len(keys) != 1 {
+				keyConfigurationValidByGroup[group] = false
+			}
+			for _, key := range keys {
+				keysByGroup[group][key] = struct{}{}
+			}
+		}
+	}
+
+	tokenCounts, err := CountTokensByGroups(nil)
+	if err != nil {
+		return nil, err
+	}
+	for group, status := range statuses {
+		status.ModelCount = len(modelsByGroup[group])
+		status.TokenCount = tokenCounts[group]
+		if len(keysByGroup[group]) == 1 {
+			for key := range keysByGroup[group] {
+				digest := sha256.Sum256([]byte(key))
+				status.KeyFingerprint = hex.EncodeToString(digest[:])[:16]
+			}
+		}
+		status.KeyConfigurationValid = keyConfigurationValidByGroup[group] && len(keysByGroup[group]) == 1
+		statuses[group] = status
+	}
+	return statuses, nil
+}
+
+func CountTokensByGroups(groups []string) (map[string]int64, error) {
+	return countTokensByGroups(DB, groups)
+}
+
+func countTokensByGroups(tx *gorm.DB, groups []string) (map[string]int64, error) {
+	type tokenGroupCount struct {
+		Group string `gorm:"column:group_name"`
+		Count int64  `gorm:"column:token_count"`
+	}
+	var counts []tokenGroupCount
+	query := tx.Model(&Token{}).
+		Select(commonGroupCol + " AS group_name, COUNT(*) AS token_count").
+		Where(commonGroupCol + " <> ''")
+	if len(groups) > 0 {
+		query = query.Where(commonGroupCol+" IN ?", groups)
+	}
+	query = query.Clauses(clause.GroupBy{Columns: []clause.Column{{Name: "group"}}})
+	if err := query.Find(&counts).Error; err != nil {
+		return nil, err
+	}
+	result := make(map[string]int64, len(counts))
+	for _, count := range counts {
+		result[count.Group] = count.Count
+	}
+	return result, nil
+}
+
 func ValidateDeepKeyChannelGroupIsolation(candidate *Channel) error {
 	if candidate == nil || candidate.Status != common.ChannelStatusEnabled {
 		return nil
@@ -220,15 +343,6 @@ func GetEnabledDeepKeyModelNames() ([]string, error) {
 	return models, nil
 }
 
-func writePricingOption(tx *gorm.DB, key, value string) error {
-	option := Option{Key: key}
-	if err := tx.Where(&Option{Key: key}).FirstOrCreate(&option).Error; err != nil {
-		return err
-	}
-	option.Value = value
-	return tx.Save(&option).Error
-}
-
 func ApplyDeepKeyPricingMigration(expectedHash string, modelRatio, modelPrice, groupRatio map[string]float64, sourceMarker string) error {
 	modelRatioJSON, err := common.Marshal(modelRatio)
 	if err != nil {
@@ -269,12 +383,7 @@ func ApplyDeepKeyPricingMigration(expectedHash string, modelRatio, modelPrice, g
 		if currentHash != expectedHash {
 			return ErrDeepKeyPricingMigrationStale
 		}
-		for key, value := range values {
-			if err := writePricingOption(tx, key, value); err != nil {
-				return err
-			}
-		}
-		return nil
+		return updateOptionsBulkTx(tx, values)
 	}); err != nil {
 		return err
 	}

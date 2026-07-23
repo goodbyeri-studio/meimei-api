@@ -174,6 +174,9 @@ export function RatioSettingsCard({
       if (data.success) {
         queryClient.invalidateQueries({ queryKey: ['system-options'] })
         queryClient.invalidateQueries({ queryKey: ['user-groups'] })
+        queryClient.invalidateQueries({
+          queryKey: ['deepkey-group-admin-status'],
+        })
         toast.success(t('Setting updated successfully'))
       } else {
         toast.error(data.message || t('Failed to update setting'))
@@ -294,6 +297,9 @@ export function RatioSettingsCard({
       })
       queryClient.invalidateQueries({ queryKey: ['system-options'] })
       queryClient.invalidateQueries({ queryKey: ['user-groups'] })
+      queryClient.invalidateQueries({
+        queryKey: ['deepkey-group-admin-status'],
+      })
       setDeepKeyGroupConfirmOpen(false)
       toast.success(
         t('Synced {{count}} DeepKey groups', { count: response.data.count })
