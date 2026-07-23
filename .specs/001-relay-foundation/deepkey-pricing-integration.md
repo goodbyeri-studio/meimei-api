@@ -90,3 +90,16 @@ DeepKey 的价格接口曾返回过 JSON 字符串封装的 JSON 文档。同步
 - 同一 `gpt-openai` 分组的双客户复验中，`user_id=3/token_id=248` 与 `user_id=4/token_id=249` 均命中同一个 `channel_id=3` 和同一上游渠道，分别记录 12 输入 Token、3 输出 Token、`quota=7`；计费归属由 `user_id` 隔离，不依赖客户可修改的 Key 文本。
 - 管理员显式执行 DeepKey 分组同步时必须等待最新上游目录；客户价格页仍可使用旧目录快速响应并在后台刷新，避免人工同步误用 15 分钟缓存。
 - 本轮临时客户 Key、消费日志、访问令牌和测试额度均已清理，测试客户恢复原始状态。
+
+## 可复核审计
+
+使用 `.specs/001-relay-foundation/audit-deepkey-production.ps1` 重新读取 DeepKey 公开目录、Relay 脱敏渠道列表，并通过每个渠道的 `/v1/models` 能力探测接口核对已配置模型。脚本不会读取或输出渠道 Key：
+
+```powershell
+./.specs/001-relay-foundation/audit-deepkey-production.ps1 `
+  -RelayBaseUrl https://relay.example.com `
+  -AdminAccessToken $env:RELAY_ADMIN_ACCESS_TOKEN `
+  -AdminUserId 1
+```
+
+输出 JSON 包含 UTC 时间、Relay 版本、目录计数、渠道探测结果和模型差异，并在终端打印 SHA-256。历史生产调用数量属于人工验收记录，不替代该脚本、自动化测试或支付数据库矩阵，也不作为无法复现的合并门槛。

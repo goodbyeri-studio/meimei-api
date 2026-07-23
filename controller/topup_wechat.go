@@ -39,9 +39,22 @@ var wechatPayClientRequestIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{16,64}$
 
 type wechatPayRuntime struct {
 	config        setting.WechatPayConfig
-	nativeService *native.NativeApiService
-	notifyHandler *notify.Handler
+	nativeService wechatNativeService
+	notifyHandler wechatNotifyHandler
 }
+
+type wechatNativeService interface {
+	Prepay(context.Context, native.PrepayRequest) (*native.PrepayResponse, *core.APIResult, error)
+	QueryOrderByOutTradeNo(context.Context, native.QueryOrderByOutTradeNoRequest) (*payments.Transaction, *core.APIResult, error)
+	CloseOrder(context.Context, native.CloseOrderRequest) (*core.APIResult, error)
+}
+
+type wechatNotifyHandler interface {
+	ParseNotifyRequest(context.Context, *http.Request, interface{}) (*notify.Request, error)
+}
+
+var wechatPayRuntimeLoader = getWechatPayRuntime
+var wechatPayWebhookEnabled = isWechatPayWebhookEnabled
 
 var wechatPayRuntimeCache struct {
 	sync.Mutex
@@ -140,6 +153,28 @@ func writeWechatNativePayResponse(c *gin.Context, order *model.WechatPayOrder) {
 	})
 }
 
+func prepayWechatNativeOrder(ctx context.Context, runtime *wechatPayRuntime, tradeNo string, amountFen int64, description string, expiresAt time.Time) (string, error) {
+	response, _, err := runtime.nativeService.Prepay(ctx, native.PrepayRequest{
+		Appid:       core.String(runtime.config.AppID),
+		Mchid:       core.String(runtime.config.MchID),
+		Description: core.String(description),
+		OutTradeNo:  core.String(tradeNo),
+		TimeExpire:  core.Time(expiresAt),
+		NotifyUrl:   core.String(runtime.config.NotifyURL),
+		Amount: &native.Amount{
+			Total:    core.Int64(amountFen),
+			Currency: core.String("CNY"),
+		},
+	})
+	if err != nil || response == nil || response.CodeUrl == nil || *response.CodeUrl == "" {
+		if err != nil {
+			return "", err
+		}
+		return "", errors.New("微信支付预下单响应缺少 code_url")
+	}
+	return *response.CodeUrl, nil
+}
+
 func RequestWechatNativePay(c *gin.Context) {
 	if !isWechatPayTopUpEnabled() {
 		common.ApiErrorMsg(c, "微信支付暂不可用")
@@ -189,7 +224,7 @@ func RequestWechatNativePay(c *gin.Context) {
 		return
 	}
 
-	runtime, err := getWechatPayRuntime(c.Request.Context())
+	runtime, err := wechatPayRuntimeLoader(c.Request.Context())
 	if err != nil {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("微信支付初始化失败 error=%q", err.Error()))
 		common.ApiErrorMsg(c, "微信支付配置不可用")
@@ -232,27 +267,14 @@ func RequestWechatNativePay(c *gin.Context) {
 	}
 
 	description := fmt.Sprintf("BlackRain Relay 额度充值（%.2f元）", topUp.Money)
-	response, _, err := runtime.nativeService.Prepay(c.Request.Context(), native.PrepayRequest{
-		Appid:       core.String(runtime.config.AppID),
-		Mchid:       core.String(runtime.config.MchID),
-		Description: core.String(description),
-		OutTradeNo:  core.String(tradeNo),
-		TimeExpire:  core.Time(expiresAt),
-		NotifyUrl:   core.String(runtime.config.NotifyURL),
-		Amount: &native.Amount{
-			Total:    core.Int64(amountFen),
-			Currency: core.String("CNY"),
-		},
-	})
-	if err != nil || response == nil || response.CodeUrl == nil || *response.CodeUrl == "" {
+	codeURL, err := prepayWechatNativeOrder(c.Request.Context(), runtime, tradeNo, amountFen, description, expiresAt)
+	if err != nil {
 		_ = model.MarkWechatPayOrderFailed(tradeNo)
-		if err != nil {
-			logger.LogError(c.Request.Context(), fmt.Sprintf("微信支付预下单失败 user_id=%d trade_no=%s error=%q", userID, tradeNo, err.Error()))
-		}
+		logger.LogError(c.Request.Context(), fmt.Sprintf("微信支付预下单失败 user_id=%d trade_no=%s error=%q", userID, tradeNo, err.Error()))
 		common.ApiErrorMsg(c, "微信支付下单失败")
 		return
 	}
-	order.CodeUrl = *response.CodeUrl
+	order.CodeUrl = codeURL
 	if err = model.UpdateWechatPayPrepayResult(tradeNo, order.CodeUrl); err != nil {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("微信支付保存二维码失败 user_id=%d trade_no=%s error=%q", userID, tradeNo, err.Error()))
 		common.ApiErrorMsg(c, "保存微信支付订单失败")
@@ -293,10 +315,14 @@ func GetWechatNativePayStatus(c *gin.Context) {
 }
 
 func reconcileWechatPayOrder(ctx context.Context, order *model.WechatPayOrder) {
-	runtime, err := getWechatPayRuntime(ctx)
+	runtime, err := wechatPayRuntimeLoader(ctx)
 	if err != nil {
 		return
 	}
+	reconcileWechatPayOrderWithRuntime(ctx, order, runtime)
+}
+
+func reconcileWechatPayOrderWithRuntime(ctx context.Context, order *model.WechatPayOrder, runtime *wechatPayRuntime) {
 	transaction, _, err := runtime.nativeService.QueryOrderByOutTradeNo(ctx, native.QueryOrderByOutTradeNoRequest{
 		OutTradeNo: core.String(order.OutTradeNo),
 		Mchid:      core.String(runtime.config.MchID),
@@ -348,21 +374,21 @@ func reconcileWechatPayOrder(ctx context.Context, order *model.WechatPayOrder) {
 }
 
 func WechatPayNotify(c *gin.Context) {
-	if !isWechatPayWebhookEnabled() {
-		c.Status(http.StatusServiceUnavailable)
+	if !wechatPayWebhookEnabled() {
+		c.AbortWithStatus(http.StatusServiceUnavailable)
 		return
 	}
-	runtime, err := getWechatPayRuntime(c.Request.Context())
+	runtime, err := wechatPayRuntimeLoader(c.Request.Context())
 	if err != nil {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("微信支付回调初始化失败 error=%q", err.Error()))
-		c.Status(http.StatusServiceUnavailable)
+		c.AbortWithStatus(http.StatusServiceUnavailable)
 		return
 	}
 
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, wechatPayNotifyMaxBody)
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		c.Status(http.StatusBadRequest)
+		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
 	c.Request.Body = io.NopCloser(bytes.NewReader(body))
@@ -372,7 +398,7 @@ func WechatPayNotify(c *gin.Context) {
 	notifyRequest, err := runtime.notifyHandler.ParseNotifyRequest(c.Request.Context(), c.Request, transaction)
 	if err != nil {
 		logger.LogWarn(c.Request.Context(), fmt.Sprintf("微信支付回调验签或解密失败 body_digest=%s error=%q", bodyDigest, err.Error()))
-		c.Status(http.StatusUnauthorized)
+		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
 	if notifyRequest.EventType != "TRANSACTION.SUCCESS" || transaction.TradeState == nil || *transaction.TradeState != "SUCCESS" ||
@@ -380,17 +406,17 @@ func WechatPayNotify(c *gin.Context) {
 		transaction.Amount.Total == nil || transaction.Amount.Currency == nil || transaction.Appid == nil || transaction.Mchid == nil ||
 		transaction.SuccessTime == nil {
 		logger.LogWarn(c.Request.Context(), fmt.Sprintf("微信支付回调字段不完整 event_id=%s body_digest=%s", notifyRequest.ID, bodyDigest))
-		c.Status(http.StatusBadRequest)
+		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
 	if *transaction.Appid != runtime.config.AppID || *transaction.Mchid != runtime.config.MchID {
 		logger.LogWarn(c.Request.Context(), fmt.Sprintf("微信支付回调商户身份不匹配 event_id=%s trade_no=%s", notifyRequest.ID, *transaction.OutTradeNo))
-		c.Status(http.StatusBadRequest)
+		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
 	successTime, err := time.Parse(time.RFC3339, *transaction.SuccessTime)
 	if err != nil {
-		c.Status(http.StatusBadRequest)
+		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
 
@@ -405,8 +431,8 @@ func WechatPayNotify(c *gin.Context) {
 	})
 	if err != nil {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("微信支付回调入账失败 event_id=%s trade_no=%s error=%q", notifyRequest.ID, *transaction.OutTradeNo, err.Error()))
-		c.Status(http.StatusInternalServerError)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	c.Status(http.StatusNoContent)
+	c.AbortWithStatus(http.StatusNoContent)
 }
