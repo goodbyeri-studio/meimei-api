@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; font-src 'self' https: data:; frame-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>goodbyeri.cc 文档</title>
@@ -93,85 +94,11 @@
   <div class="scrim" id="scrim"></div>
 
   <main class="content">
-    <iframe id="viewer" title="文档内容" src="articles/guide-intro.html"></iframe>
+    <iframe id="viewer" title="文档内容" src="articles/guide-intro.html" sandbox="allow-popups allow-popups-to-escape-sandbox"></iframe>
   </main>
 
-  <script>
-    var iframe = document.getElementById('viewer');
-    var links = Array.prototype.slice.call(document.querySelectorAll('.nav-link'));
-    var DEFAULT = 'guide-intro';
 
-    function setActive(slug) {
-      var found = null;
-      links.forEach(function (a) {
-        var on = a.dataset.slug === slug;
-        a.classList.toggle('active', on);
-        if (on) found = a;
-      });
-      if (found) found.scrollIntoView({ block: 'nearest' });
-    }
 
-    function go(slug, push) {
-      if (!slug) slug = DEFAULT;
-      var target = 'articles/' + slug + '.html';
-      if (iframe.getAttribute('src') !== target) iframe.setAttribute('src', target);
-      setActive(slug);
-      if (push && location.hash.slice(1) !== slug) location.hash = slug;
-      closeNav();
-    }
-
-    links.forEach(function (a) {
-      a.addEventListener('click', function (e) {
-        e.preventDefault();
-        go(a.dataset.slug, true);
-      });
-    });
-
-    window.addEventListener('hashchange', function () {
-      go(decodeURIComponent(location.hash.slice(1)), false);
-    });
-
-    // iframe 内部互链跳转后,同步外层地址与高亮
-    iframe.addEventListener('load', function () {
-      try {
-        var path = iframe.contentWindow.location.pathname;
-        var m = path.match(/([^/]+)\.html$/);
-        if (m) {
-          var slug = decodeURIComponent(m[1]);
-          if (location.hash.slice(1) !== slug) {
-            history.replaceState(null, '', '#' + slug);
-          }
-          setActive(slug);
-          var t = iframe.contentDocument && iframe.contentDocument.title;
-          if (t) document.title = t;
-        }
-      } catch (err) { /* 跨域时忽略 */ }
-    });
-
-    // 搜索过滤
-    var search = document.getElementById('nav-search');
-    search.addEventListener('input', function () {
-      var q = search.value.trim().toLowerCase();
-      document.querySelectorAll('.nav-group').forEach(function (g) {
-        var any = false;
-        g.querySelectorAll('.nav-item').forEach(function (li) {
-          var hit = !q || li.textContent.toLowerCase().indexOf(q) !== -1;
-          li.style.display = hit ? '' : 'none';
-          if (hit) any = true;
-        });
-        g.style.display = any ? '' : 'none';
-      });
-    });
-
-    // 移动端抽屉
-    var body = document.body, scrim = document.getElementById('scrim');
-    function closeNav() { body.classList.remove('nav-open'); }
-    document.getElementById('menu-toggle').addEventListener('click', function () {
-      body.classList.toggle('nav-open');
-    });
-    scrim.addEventListener('click', closeNav);
-
-    go(decodeURIComponent(location.hash.slice(1)) || DEFAULT, false);
-  </script>
+  <script src="app.js" defer></script>
 </body>
 </html>
