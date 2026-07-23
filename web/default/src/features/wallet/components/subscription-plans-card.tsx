@@ -270,12 +270,10 @@ export function SubscriptionPlansCard({
         icon={<Crown className='h-4 w-4' />}
         iconTone='warning'
         disableHoverEffect
-        className='rounded-lg border-emerald-500/15 bg-[linear-gradient(145deg,rgba(255,255,255,0.84),rgba(236,253,245,0.48))] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_18px_45px_rgba(16,185,129,0.08)] backdrop-blur-xl dark:bg-[linear-gradient(145deg,rgba(24,24,27,0.88),rgba(6,78,59,0.16))]'
-        headerClassName='border-emerald-500/10 bg-white/25 dark:bg-white/[0.02]'
         contentClassName='space-y-4 sm:space-y-5'
       >
         {/* My subscriptions & billing preference */}
-        <div className='rounded-lg border border-white/55 bg-white/40 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-md sm:p-4 dark:border-white/10 dark:bg-black/10'>
+        <div className='rounded-lg border p-3 sm:p-4'>
           <div className='flex flex-wrap items-center justify-between gap-2.5 sm:gap-3'>
             <div className='flex min-w-0 flex-wrap items-center gap-2'>
               <span className='text-sm font-medium'>
@@ -559,9 +557,8 @@ export function SubscriptionPlansCard({
                 <div
                   key={plan.id}
                   className={cn(
-                    'flex min-h-64 flex-col rounded-lg border border-white/70 bg-white/52 p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_10px_28px_rgba(15,23,42,0.06)] backdrop-blur-lg transition-colors sm:p-4 dark:border-white/10 dark:bg-white/[0.035]',
-                    isPopular &&
-                      'border-emerald-500/45 bg-emerald-50/45 dark:border-emerald-400/30 dark:bg-emerald-950/20'
+                    'bg-card flex min-h-64 flex-col rounded-lg border p-3.5 sm:p-4',
+                    isPopular && 'border-primary/60'
                   )}
                 >
                   <div className='flex h-full flex-col'>
@@ -589,7 +586,7 @@ export function SubscriptionPlansCard({
                     </div>
 
                     <div className='py-2'>
-                      <span className='text-2xl font-bold text-emerald-700 dark:text-emerald-300'>
+                      <span className='text-primary text-2xl font-bold'>
                         {price}
                       </span>
                     </div>
@@ -621,8 +618,7 @@ export function SubscriptionPlansCard({
                       </Tooltip>
                     ) : (
                       <Button
-                        variant='outline'
-                        className='w-full border-emerald-600/30 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white dark:bg-emerald-500 dark:hover:bg-emerald-600'
+                        className='w-full'
                         onClick={() => {
                           setSelectedPlan(p)
                           setPurchaseOpen(true)

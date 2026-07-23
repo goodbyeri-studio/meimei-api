@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSeedDefaultCNYSubscriptionPlansIsIdempotent(t *testing.T) {
+func TestSeedDefaultSubscriptionPlansIsIdempotent(t *testing.T) {
 	truncateTables(t)
 
 	require.NoError(t, seedDefaultCNYSubscriptionPlans())
@@ -24,7 +24,7 @@ func TestSeedDefaultCNYSubscriptionPlansIsIdempotent(t *testing.T) {
 	assert.Greater(t, plans[0].TotalAmount, int64(0))
 }
 
-func TestSeedDefaultCNYSubscriptionPlansPreservesAdminCatalog(t *testing.T) {
+func TestSeedDefaultSubscriptionPlansPreservesAdminCatalog(t *testing.T) {
 	truncateTables(t)
 
 	customPlan := &SubscriptionPlan{
@@ -88,4 +88,43 @@ func TestCreatePendingSubscriptionOrderReservesPurchaseLimit(t *testing.T) {
 
 	require.NoError(t, DB.Model(first).Update("status", common.TopUpStatusFailed).Error)
 	require.NoError(t, CreatePendingSubscriptionOrder(second))
+}
+
+func TestBalancePurchaseHonorsPendingReservation(t *testing.T) {
+	truncateTables(t)
+
+	user := &User{
+		Username: "subscription-balance-reservation-user",
+		Status:   common.UserStatusEnabled,
+		Quota:    common.MaxQuota,
+	}
+	require.NoError(t, DB.Create(user).Error)
+	plan := &SubscriptionPlan{
+		Title:              "余额限购套餐",
+		PriceAmount:        10,
+		Currency:           "CNY",
+		DurationUnit:       SubscriptionDurationMonth,
+		DurationValue:      1,
+		Enabled:            true,
+		MaxPurchasePerUser: 1,
+		QuotaResetPeriod:   SubscriptionResetNever,
+	}
+	require.NoError(t, DB.Create(plan).Error)
+	require.NoError(t, CreatePendingSubscriptionOrder(&SubscriptionOrder{
+		UserId:          user.Id,
+		PlanId:          plan.Id,
+		Money:           plan.PriceAmount,
+		TradeNo:         "subscription-balance-reservation-pending",
+		PaymentMethod:   PaymentMethodWechatNative,
+		PaymentProvider: PaymentProviderWechatSubscription,
+		Status:          common.TopUpStatusPending,
+		CreateTime:      time.Now().Unix(),
+	}))
+
+	require.ErrorIs(t, PurchaseSubscriptionWithBalance(user.Id, plan.Id), ErrSubscriptionPurchaseLimit)
+
+	var storedUser User
+	require.NoError(t, DB.First(&storedUser, user.Id).Error)
+	assert.Equal(t, common.MaxQuota, storedUser.Quota)
+	assert.Zero(t, countUserSubscriptionsForPaymentGuardTest(t, user.Id))
 }

@@ -133,7 +133,11 @@ func GetSubscriptionWechatPayOrderForUser(userID int, tradeNo string) (*Subscrip
 }
 
 func CreateSubscriptionWechatPayOrder(subscriptionOrder *SubscriptionOrder, order *SubscriptionWechatPayOrder) error {
-	if subscriptionOrder == nil || order == nil {
+	if subscriptionOrder == nil || order == nil ||
+		subscriptionOrder.UserId <= 0 || subscriptionOrder.UserId != order.UserId ||
+		subscriptionOrder.TradeNo == "" || subscriptionOrder.TradeNo != order.OutTradeNo ||
+		subscriptionOrder.Status != common.TopUpStatusPending || order.Status != WechatPayOrderStatusPending ||
+		order.AmountFen <= 0 || order.Currency != "CNY" {
 		return errors.New("invalid subscription wechat order")
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {

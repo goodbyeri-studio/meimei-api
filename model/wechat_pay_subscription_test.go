@@ -119,3 +119,25 @@ func TestCompleteWechatPaySubscriptionRejectsAmountMismatch(t *testing.T) {
 	assert.Equal(t, common.TopUpStatusPending, storedOrder.Status)
 	assert.Zero(t, countUserSubscriptionsForPaymentGuardTest(t, user.Id))
 }
+
+func TestCreateSubscriptionWechatPayOrderRejectsOwnershipMismatch(t *testing.T) {
+	truncateTables(t)
+
+	subscriptionOrder := &SubscriptionOrder{
+		UserId:  9301,
+		TradeNo: "wechat-subscription-owner",
+		Status:  common.TopUpStatusPending,
+	}
+	wechatOrder := &SubscriptionWechatPayOrder{
+		UserId:     9302,
+		OutTradeNo: subscriptionOrder.TradeNo,
+		AmountFen:  1000,
+		Currency:   "CNY",
+		Status:     WechatPayOrderStatusPending,
+	}
+
+	require.Error(t, CreateSubscriptionWechatPayOrder(subscriptionOrder, wechatOrder))
+	var orderCount int64
+	require.NoError(t, DB.Model(&SubscriptionOrder{}).Count(&orderCount).Error)
+	assert.Zero(t, orderCount)
+}

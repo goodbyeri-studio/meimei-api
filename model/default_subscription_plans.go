@@ -25,7 +25,7 @@ var defaultCNYSubscriptionPlans = []defaultSubscriptionPlan{
 	{title: "企业包", subtitle: "适合企业级高并发场景", amount: 2000},
 }
 
-// seedDefaultCNYSubscriptionPlans initializes the BlackRain plan catalog only
+// seedDefaultCNYSubscriptionPlans initializes the default plan catalog only
 // for a brand-new installation. Existing administrator-managed plans are never
 // changed or supplemented automatically.
 func seedDefaultCNYSubscriptionPlans() error {

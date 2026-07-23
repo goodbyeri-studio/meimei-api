@@ -117,7 +117,7 @@ func SubscriptionRequestWechatPay(c *gin.Context) {
 		return
 	}
 
-	description := fmt.Sprintf("BlackRain Relay 套餐：%s", plan.Title)
+	description := fmt.Sprintf("MeiMei API 套餐：%s", plan.Title)
 	codeURL, err := prepayWechatNativeOrder(c.Request.Context(), runtime, tradeNo, amountFen, description, expiresAt)
 	if err != nil {
 		_ = model.MarkSubscriptionWechatPayOrderFailed(tradeNo)
