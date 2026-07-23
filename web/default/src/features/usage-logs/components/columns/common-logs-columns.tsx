@@ -37,7 +37,11 @@ import {
 } from '@/components/ui/tooltip'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
-import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
+import {
+  formatLogQuota,
+  formatTimestampToDate,
+  formatUseTime,
+} from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import { LOG_TYPE_ALL_VALUE } from '../../constants'
@@ -45,7 +49,6 @@ import type { UsageLog } from '../../data/schema'
 import {
   formatModelName,
   getTieredBillingSummary,
-  hasAnyCacheTokens,
   parseLogOther,
   isViolationFeeLog,
   renderAuditContent,
@@ -59,7 +62,6 @@ import {
 import type { LogOtherData } from '../../types'
 import { DetailsDialog } from '../dialogs/details-dialog'
 import { ModelBadge } from '../model-badge'
-import { TimingMetricsCell, StreamTpsCell } from '../timing-metrics-cell'
 import { useUsageLogsContext } from '../usage-logs-provider'
 
 interface DetailSegment {
@@ -86,17 +88,11 @@ function getGroupRatio(other: LogOtherData | null): number | null {
   }
 
   const groupRatio = other?.group_ratio
-  if (groupRatio != null && groupRatio !== 1 && Number.isFinite(groupRatio)) {
+  if (groupRatio != null && Number.isFinite(groupRatio)) {
     return groupRatio
   }
 
   return null
-}
-
-function splitQuotaDisplay(value: string): { prefix: string; amount: string } {
-  const match = value.match(/^([^0-9+\-.,\s]+)(.+)$/)
-  if (!match) return { prefix: '', amount: value }
-  return { prefix: match[1], amount: match[2] }
 }
 
 function buildDetailSegments(
@@ -226,38 +222,21 @@ function buildTypeDetailSegments(
         text: `${t('Per-call')} · ${formatBillingCurrencyFromUSD(modelPrice, priceOpts)}`,
       })
     } else if (other.model_ratio != null) {
-      const inputPriceUSD = other.model_ratio * 2.0
-      const baseEntries = [formatPriceCompact(inputPriceUSD)]
-      if (other.completion_ratio != null) {
-        baseEntries.push(
-          formatPriceCompact(inputPriceUSD * other.completion_ratio)
+      const ratioParts = [
+        `${t('Model')}: ${formatRatioCompact(other.model_ratio)}`,
+      ]
+      if (other.cache_ratio != null) {
+        ratioParts.push(
+          `${t('Cache')}: ${formatRatioCompact(other.cache_ratio)}`
         )
       }
-      segments.push({
-        text: `${t('Standard')} · ${formatPriceList(baseEntries, true)}`,
-      })
-
-      if (hasAnyCacheTokens(other)) {
-        const cacheEntries = [
-          other.cache_ratio != null && other.cache_ratio !== 1
-            ? formatPriceCompact(inputPriceUSD * other.cache_ratio)
-            : null,
-          other.cache_creation_ratio != null && other.cache_creation_ratio !== 1
-            ? formatPriceCompact(inputPriceUSD * other.cache_creation_ratio)
-            : null,
-          other.cache_creation_ratio_1h != null &&
-          other.cache_creation_ratio_1h !== 0
-            ? formatPriceCompact(inputPriceUSD * other.cache_creation_ratio_1h)
-            : null,
-        ].filter(Boolean) as string[]
-
-        if (cacheEntries.length > 0) {
-          segments.push({
-            text: `${t('Cache')} ${formatPriceList(cacheEntries, false)}`,
-            muted: true,
-          })
-        }
+      const groupRatio = getGroupRatio(other)
+      if (groupRatio != null) {
+        ratioParts.push(
+          `${t('Group Ratio')}: ${formatRatioCompact(groupRatio)}`
+        )
       }
+      segments.push({ text: ratioParts.join(' * ') })
     } else {
       const userGroupRatio = other.user_group_ratio
       const groupRatio = other.group_ratio
@@ -292,26 +271,16 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
   const { t } = useTranslation()
   const columns: ColumnDef<UsageLog>[] = [
     {
+      id: 'created_at',
       accessorKey: 'created_at',
       header: t('Time'),
       cell: ({ row }) => {
-        const log = row.original
         const timestamp = row.getValue('created_at') as number
-        const config = getLogTypeConfig(log.type)
 
         return (
-          <div className='flex min-w-0 flex-col gap-0.5'>
-            <span className='truncate font-mono text-xs tabular-nums'>
-              {formatTimestampToDate(timestamp)}
-            </span>
-            <StatusBadge
-              label={t(config.label)}
-              variant={config.color as StatusBadgeProps['variant']}
-              size='sm'
-              copyable={false}
-              className='-ml-1.5 !text-xs [&_span]:!text-xs'
-            />
-          </div>
+          <span className='truncate font-mono text-xs tabular-nums'>
+            {formatTimestampToDate(timestamp)}
+          </span>
         )
       },
       filterFn: (row, _id, value) => {
@@ -541,6 +510,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
   }
 
   columns.push({
+    id: 'token_name',
     accessorKey: 'token_name',
     header: t('Token'),
     cell: function TokenNameCell({ row }) {
@@ -551,14 +521,10 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
       const tokenName = log.token_name
       if (!tokenName) return null
 
-      const other = parseLogOther(log.other)
       const displayName = sensitiveVisible ? tokenName : '••••'
-      let group = log.group
-      if (!group) group = other?.group || ''
-      const groupRatio = getGroupRatio(other)
 
       return (
-        <div className='flex max-w-[200px] flex-col gap-0.5'>
+        <div className='flex max-w-[160px]'>
           <TooltipProvider delay={300}>
             <Tooltip>
               <TooltipTrigger render={<div className='max-w-full' />}>
@@ -578,32 +544,37 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
               )}
             </Tooltip>
           </TooltipProvider>
-          {(group || groupRatio != null) && (
-            <span className='block max-w-full truncate text-xs leading-none'>
-              {group ? (
-                <GroupBadge
-                  group={group}
-                  label={sensitiveVisible ? undefined : '••••'}
-                  type='text'
-                  size='sm'
-                  className='inline align-baseline text-xs leading-none [&>span]:leading-none'
-                />
-              ) : null}
-              {group && groupRatio != null ? ' ' : null}
-              {groupRatio != null ? (
-                <span className='text-muted-foreground/60 relative top-px align-baseline tabular-nums'>
-                  {formatRatioCompact(groupRatio)}x
-                </span>
-              ) : null}
-            </span>
-          )}
         </div>
       )
     },
-    size: 160,
+    size: 130,
+  })
+  columns.push({
+    id: 'group',
+    accessorKey: 'group',
+    header: t('Group'),
+    cell: function GroupCell({ row }) {
+      const { sensitiveVisible } = useUsageLogsContext()
+      const log = row.original
+      if (!isDisplayableLogType(log.type)) return null
+
+      const other = parseLogOther(log.other)
+      const group = log.group || other?.group || ''
+      if (!group) return <span className='text-muted-foreground'>-</span>
+
+      return (
+        <GroupBadge
+          group={group}
+          label={sensitiveVisible ? undefined : '••••'}
+          size='sm'
+        />
+      )
+    },
+    size: 130,
   })
   columns.push(
     {
+      id: 'model_name',
       accessorKey: 'model_name',
       header: t('Model'),
       cell: function ModelCell({ row }) {
@@ -624,150 +595,130 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
       meta: { mobileTitle: true },
     },
     {
-      accessorKey: 'is_stream',
-      header: t('Stream'),
+      id: 'type',
+      accessorKey: 'type',
+      header: t('Type'),
+      cell: ({ row }) => {
+        const log = row.original
+        const config = getLogTypeConfig(log.type)
+
+        return (
+          <StatusBadge
+            label={t(config.label)}
+            variant={config.color as StatusBadgeProps['variant']}
+            size='sm'
+            copyable={false}
+          />
+        )
+      },
+      size: 90,
+    },
+    {
+      id: 'prompt_tokens',
+      accessorKey: 'prompt_tokens',
+      header: t('Input'),
+      cell: ({ row }) => {
+        const log = row.original
+        if (!isDisplayableLogType(log.type)) return null
+
+        const promptTokens = log.prompt_tokens || 0
+        return (
+          <span className='font-mono text-xs font-medium tabular-nums'>
+            {promptTokens}
+          </span>
+        )
+      },
+      size: 90,
+    },
+    {
+      id: 'completion_tokens',
+      accessorKey: 'completion_tokens',
+      header: t('Output'),
+      cell: ({ row }) => {
+        const log = row.original
+        if (!isDisplayableLogType(log.type)) return null
+
+        return (
+          <span className='font-mono text-xs font-medium tabular-nums'>
+            {log.completion_tokens || 0}
+          </span>
+        )
+      },
+      size: 90,
+    },
+
+    {
+      id: 'use_time',
+      accessorKey: 'use_time',
+      header: t('Duration / First Token'),
       cell: ({ row }) => {
         const log = row.original
         if (!isTimingLogType(log.type)) return null
 
         const useTime = row.getValue('use_time') as number
         const other = parseLogOther(log.other)
-        const tokensPerSecond =
-          useTime > 0 && log.completion_tokens > 0
-            ? log.completion_tokens / useTime
-            : null
+
+        const firstTokenSeconds =
+          other?.frt != null && other.frt > 0 ? other.frt / 1000 : null
 
         return (
-          <StreamTpsCell
-            isStream={log.is_stream}
-            tokensPerSecond={tokensPerSecond}
-            streamStatus={other?.stream_status}
-          />
-        )
-      },
-      meta: { label: t('Stream') },
-    },
-    {
-      accessorKey: 'prompt_tokens',
-      header: 'Tokens',
-      cell: ({ row }) => {
-        const log = row.original
-        if (!isDisplayableLogType(log.type)) return null
-
-        const other = parseLogOther(log.other)
-
-        const promptTokens = log.prompt_tokens || 0
-        const completionTokens = log.completion_tokens || 0
-        if (promptTokens === 0 && completionTokens === 0) {
-          return <span className='text-muted-foreground text-xs'>-</span>
-        }
-
-        const cacheReadTokens = other?.cache_tokens || 0
-        const cacheWrite5m = other?.cache_creation_tokens_5m || 0
-        const cacheWrite1h = other?.cache_creation_tokens_1h || 0
-        const hasSplitCache = cacheWrite5m > 0 || cacheWrite1h > 0
-        const cacheWriteTokens = hasSplitCache
-          ? cacheWrite5m + cacheWrite1h
-          : other?.cache_creation_tokens || 0
-
-        return (
-          <div className='flex flex-col gap-0.5'>
-            <span className='font-mono text-xs font-medium tabular-nums'>
-              {promptTokens.toLocaleString()} /{' '}
-              {completionTokens.toLocaleString()}
-            </span>
-            {(cacheReadTokens > 0 || cacheWriteTokens > 0) && (
-              <div className='flex items-center gap-1 text-[11px]'>
-                {cacheReadTokens > 0 && (
-                  <span className='text-muted-foreground/60'>
-                    {t('Cache')}↓ {cacheReadTokens.toLocaleString()}
-                  </span>
-                )}
-                {cacheWriteTokens > 0 && (
-                  <span className='text-muted-foreground/60'>
-                    ↑ {cacheWriteTokens.toLocaleString()}
-                  </span>
-                )}
-              </div>
+          <div className='flex min-w-max items-center gap-1.5'>
+            <StatusBadge
+              label={formatUseTime(useTime)}
+              variant='success'
+              size='sm'
+              copyable={false}
+            />
+            {log.is_stream && firstTokenSeconds != null && (
+              <StatusBadge
+                label={formatUseTime(firstTokenSeconds)}
+                variant='success'
+                size='sm'
+                copyable={false}
+              />
+            )}
+            {log.is_stream && (
+              <StatusBadge
+                label={t('Stream')}
+                variant='info'
+                size='sm'
+                copyable={false}
+              />
             )}
           </div>
         )
       },
+      size: 190,
     },
+
     {
-      accessorKey: 'quota',
-      header: t('Cost'),
+      id: 'cache_tokens',
+      header: t('Cache'),
+      accessorFn: (row) => row.other,
       cell: ({ row }) => {
         const log = row.original
         if (!isDisplayableLogType(log.type)) return null
 
-        const quota = row.getValue('quota') as number
         const other = parseLogOther(log.other)
-        const isSubscription = other?.billing_source === 'subscription'
-
-        if (isSubscription) {
-          return (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <StatusBadge
-                      label={t('Subscription')}
-                      variant='success'
-                      size='sm'
-                      copyable={false}
-                      className='cursor-help'
-                    />
-                  }
-                />
-                <TooltipContent>
-                  <span>
-                    {t('Deducted by subscription')}: {formatLogQuota(quota)}
-                  </span>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )
-        }
-
-        const quotaStr = formatLogQuota(quota)
-        const quotaDisplay = splitQuotaDisplay(quotaStr)
+        const cacheReadTokens = other?.cache_tokens || 0
+        const cacheWrite5m = other?.cache_creation_tokens_5m || 0
+        const cacheWrite1h = other?.cache_creation_tokens_1h || 0
+        const cacheWriteTokens =
+          cacheWrite5m > 0 || cacheWrite1h > 0
+            ? cacheWrite5m + cacheWrite1h
+            : other?.cache_creation_tokens || 0
 
         return (
-          <div className='flex flex-col gap-0.5'>
-            <span className='border-border/80 bg-muted/60 inline-flex h-6 w-fit items-center rounded-md border px-2 [font-family:var(--font-body)] text-sm leading-none font-semibold tabular-nums'>
-              {quotaDisplay.prefix && (
-                <span className='mr-1'>{quotaDisplay.prefix}</span>
-              )}
-              <span>{quotaDisplay.amount}</span>
-            </span>
-          </div>
+          <span className='font-mono text-xs font-medium tabular-nums'>
+            {cacheReadTokens}/{cacheWriteTokens}
+          </span>
         )
       },
+      size: 110,
     },
 
     {
-      accessorKey: 'use_time',
-      header: t('Timing'),
-      cell: ({ row }) => {
-        const log = row.original
-        if (!isTimingLogType(log.type)) return null
-
-        const useTime = row.getValue('use_time') as number
-        const other = parseLogOther(log.other)
-
-        return (
-          <TimingMetricsCell
-            useTimeSec={useTime}
-            completionTokens={log.completion_tokens}
-            frtMs={other?.frt}
-            isStream={log.is_stream}
-          />
-        )
-      },
-    },
-
-    {
+      id: 'content',
       accessorKey: 'content',
       header: t('Details'),
       cell: function DetailsCell({ row }) {
@@ -828,10 +779,26 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           </>
         )
       },
-      size: 180,
-      maxSize: 200,
+      size: 260,
+      maxSize: 320,
     }
   )
 
-  return columns
+  const deepKeyColumnOrder = [
+    'created_at',
+    'token_name',
+    'group',
+    'type',
+    'model_name',
+    'use_time',
+    'prompt_tokens',
+    'completion_tokens',
+    'cache_tokens',
+    'content',
+  ]
+
+  return deepKeyColumnOrder.flatMap((columnId) => {
+    const column = columns.find((item) => item.id === columnId)
+    return column ? [column] : []
+  })
 }
