@@ -11,18 +11,31 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 func TestMain(m *testing.M) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	dsn := os.Getenv("PAYMENT_TEST_DSN")
+	databaseType := common.DatabaseTypeSQLite
+	var dialector gorm.Dialector = sqlite.Open(":memory:")
+	switch os.Getenv("PAYMENT_TEST_DB") {
+	case "mysql":
+		databaseType = common.DatabaseTypeMySQL
+		dialector = mysql.Open(dsn)
+	case "postgres":
+		databaseType = common.DatabaseTypePostgreSQL
+		dialector = postgres.Open(dsn)
+	}
+	db, err := gorm.Open(dialector, &gorm.Config{})
 	if err != nil {
 		panic("failed to open test db: " + err.Error())
 	}
 	DB = db
 	LOG_DB = db
 
-	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	common.SetDatabaseTypes(databaseType, databaseType)
 	common.RedisEnabled = false
 	common.BatchUpdateEnabled = false
 	common.LogConsumeEnabled = true
@@ -32,7 +45,11 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic("failed to get sql.DB: " + err.Error())
 	}
-	sqlDB.SetMaxOpenConns(1)
+	if databaseType == common.DatabaseTypeSQLite {
+		sqlDB.SetMaxOpenConns(1)
+	} else {
+		sqlDB.SetMaxOpenConns(8)
+	}
 
 	if err := db.AutoMigrate(
 		&Task{},

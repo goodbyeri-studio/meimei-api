@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -11,12 +12,14 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
 	deepKeyPricingCatalogURL     = "https://deepkey.top/api/pricing"
-	deepKeyPricingMarkupPercent  = 30.0
+	deepKeyGroupMarkupPercent    = 30.0
 	deepKeyCatalogCacheTTL       = 15 * time.Minute
+	deepKeyCatalogRetryDelay     = 30 * time.Second
 	deepKeyCatalogRequestTimeout = 8 * time.Second
 	deepKeyCatalogMaxBodyBytes   = 5 << 20
 )
@@ -44,19 +47,29 @@ var deepKeyCatalogCache = struct {
 	sync.RWMutex
 	catalog   *deepKeyPricingCatalog
 	fetchedAt time.Time
+	retryAt   time.Time
 }{}
 
-func applyDeepKeyCatalogMarkup(items []model.Pricing, markupPercent float64) {
-	multiplier := 1 + markupPercent/100
+var (
+	deepKeyCatalogRefresh singleflight.Group
+	deepKeyCatalogFetcher = fetchDeepKeyPricingCatalog
+)
+
+func applyDeepKeyCatalogPolicy(items []model.Pricing, groupRatio map[string]float64) error {
 	for i := range items {
 		items[i].CatalogOnly = true
 		items[i].CatalogSource = "DeepKey"
-		if items[i].QuotaType == 1 {
-			items[i].ModelPrice = roundRatioValue(items[i].ModelPrice * multiplier)
-			continue
-		}
-		items[i].ModelRatio = roundRatioValue(items[i].ModelRatio * multiplier)
 	}
+
+	multiplier := 1 + deepKeyGroupMarkupPercent/100
+	for name, ratio := range groupRatio {
+		markedUp := roundRatioValue(ratio * multiplier)
+		if ratio <= 0 || math.IsNaN(ratio) || math.IsInf(ratio, 0) || markedUp > deepKeyMaxGroupRatio {
+			return fmt.Errorf("DeepKey group %q ratio must be within (0, %d] after markup", name, deepKeyMaxGroupRatio)
+		}
+		groupRatio[name] = markedUp
+	}
+	return nil
 }
 
 func fetchDeepKeyPricingCatalog() (*deepKeyPricingCatalog, error) {
@@ -95,7 +108,9 @@ func fetchDeepKeyPricingCatalog() (*deepKeyPricingCatalog, error) {
 		return nil, fmt.Errorf("DeepKey pricing returned no models")
 	}
 
-	applyDeepKeyCatalogMarkup(upstream.Data, deepKeyPricingMarkupPercent)
+	if err := applyDeepKeyCatalogPolicy(upstream.Data, upstream.GroupRatio); err != nil {
+		return nil, err
+	}
 	return &deepKeyPricingCatalog{
 		Models:            upstream.Data,
 		Vendors:           upstream.Vendors,
@@ -108,29 +123,51 @@ func fetchDeepKeyPricingCatalog() (*deepKeyPricingCatalog, error) {
 
 func getDeepKeyPricingCatalog() (*deepKeyPricingCatalog, error) {
 	deepKeyCatalogCache.RLock()
-	if deepKeyCatalogCache.catalog != nil && time.Since(deepKeyCatalogCache.fetchedAt) < deepKeyCatalogCacheTTL {
-		catalog := deepKeyCatalogCache.catalog
-		deepKeyCatalogCache.RUnlock()
+	catalog := deepKeyCatalogCache.catalog
+	now := time.Now()
+	fresh := catalog != nil && now.Sub(deepKeyCatalogCache.fetchedAt) < deepKeyCatalogCacheTTL
+	backingOff := catalog != nil && now.Before(deepKeyCatalogCache.retryAt)
+	deepKeyCatalogCache.RUnlock()
+	if fresh || backingOff {
 		return catalog, nil
 	}
-	deepKeyCatalogCache.RUnlock()
 
-	deepKeyCatalogCache.Lock()
-	defer deepKeyCatalogCache.Unlock()
-	if deepKeyCatalogCache.catalog != nil && time.Since(deepKeyCatalogCache.fetchedAt) < deepKeyCatalogCacheTTL {
-		return deepKeyCatalogCache.catalog, nil
+	if catalog != nil {
+		go func() {
+			_, _ = refreshDeepKeyPricingCatalog()
+		}()
+		return catalog, nil
 	}
 
-	catalog, err := fetchDeepKeyPricingCatalog()
-	if err != nil {
-		if deepKeyCatalogCache.catalog != nil {
-			return deepKeyCatalogCache.catalog, nil
+	return refreshDeepKeyPricingCatalog()
+}
+
+func refreshDeepKeyPricingCatalog() (*deepKeyPricingCatalog, error) {
+	value, err, _ := deepKeyCatalogRefresh.Do("pricing", func() (any, error) {
+		freshCatalog, fetchErr := deepKeyCatalogFetcher()
+		if fetchErr != nil {
+			deepKeyCatalogCache.Lock()
+			if deepKeyCatalogCache.catalog != nil {
+				deepKeyCatalogCache.retryAt = time.Now().Add(deepKeyCatalogRetryDelay)
+			}
+			deepKeyCatalogCache.Unlock()
+			return nil, fetchErr
 		}
+		deepKeyCatalogCache.Lock()
+		deepKeyCatalogCache.catalog = freshCatalog
+		deepKeyCatalogCache.fetchedAt = time.Now()
+		deepKeyCatalogCache.retryAt = time.Time{}
+		deepKeyCatalogCache.Unlock()
+		return freshCatalog, nil
+	})
+	if err != nil {
 		return nil, err
 	}
-	deepKeyCatalogCache.catalog = catalog
-	deepKeyCatalogCache.fetchedAt = time.Now()
-	return catalog, nil
+	refreshed, ok := value.(*deepKeyPricingCatalog)
+	if !ok {
+		return nil, fmt.Errorf("DeepKey pricing cache returned an invalid value")
+	}
+	return refreshed, nil
 }
 
 func mergePricingCatalog(local, catalog []model.Pricing) []model.Pricing {
@@ -163,21 +200,6 @@ func mergePricingVendors(local, catalog []model.PricingVendor) []model.PricingVe
 		}
 		merged = append(merged, vendor)
 		seen[vendor.ID] = struct{}{}
-	}
-	return merged
-}
-
-func mergeStringList(primary, secondary []string) []string {
-	merged := make([]string, 0, len(primary)+len(secondary))
-	seen := make(map[string]struct{}, len(primary)+len(secondary))
-	for _, items := range [][]string{primary, secondary} {
-		for _, item := range items {
-			if _, exists := seen[item]; exists {
-				continue
-			}
-			merged = append(merged, item)
-			seen[item] = struct{}{}
-		}
 	}
 	return merged
 }

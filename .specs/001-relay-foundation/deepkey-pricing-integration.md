@@ -2,60 +2,38 @@
 
 ## 目标
 
-- 将 `https://deepkey.top/api/pricing` 作为内置价格源供管理员选择。
-- 允许管理员在同步前设置统一加价百分比，当前业务默认值为 `30%`。
-- 模型广场只发布已配置渠道真实可调用的模型，不能仅根据公开价格目录生成可调用能力。
-- 客户使用 Relay 签发的本地 Token；DeepKey Key 仅保存在 Relay 渠道配置中。
-- 配置文档和分组监控沿用 DeepKey 的导航模式：顶部入口只负责跳转到管理员配置的外部站点。
+- 将 `https://deepkey.top/api/pricing` 作为内置价格源。
+- 公开目录只提供候选模型和描述，不作为用户分组授权或渠道可调用性的依据。
+- 管理员显式同步时，只发布 Relay 中已有启用渠道的同名分组。
+- 客户只使用 Relay 本地 Token；DeepKey Key 仅保存在 Relay 渠道配置中。
 
-## 定价规则
+## 定价与权限
 
-- Token 模型仅对 `model_ratio` 应用 `1 + markup_percent / 100`。
-- 按次模型仅对 `model_price` 应用 `1 + markup_percent / 100`。
-- `completion_ratio`、缓存倍率、图片倍率和音频倍率保持上游原值，避免重复加价。
-- 百分比范围为 `0` 到 `1000`，后端必须再次校验，不能只依赖前端输入约束。
-- 结果保留六位小数，与现有倍率同步精度一致。
+- Token 模型的统一加价只作用于 `model_ratio`，按次模型只作用于 `model_price`。
+- `completion_ratio`、缓存、图片和音频倍率不重复加价。
+- 加价百分比必须在 `0` 到 `1000` 之间，后端独立校验。
+- 目录模型在价格接口中标记为 `catalog_only` 和 `catalog_source=DeepKey`。
+- 本地同名模型优先于目录模型；目录模型必须通过当前用户的 `GetUserUsableGroups` 过滤。
+- 目录中的分组倍率不能扩大用户权限，只能补充当前用户已获准分组的描述性数据。
 
-## 模型发布
+## 缓存与同步
 
-1. 管理员配置专用 DeepKey Key 和 `https://deepkey.top` 渠道。
-2. Relay 通过渠道 `/v1/models` 探测该 Key 的真实模型范围。
-3. 管理员确认新增模型后更新渠道能力。
-4. 使用“系统设置 -> 模型设置 -> 上游价格同步”选择 `DeepKey 模型定价`，默认加价 `30%`。
-5. 选择需要采用的上游价格并应用同步。
-6. 模型广场根据已启用渠道能力展示模型和最终售价。
+- 目录缓存有效期为 15 分钟，远程请求超时为 8 秒，响应上限为 5 MiB。
+- 缓存过期后继续返回旧值并在后台刷新；并发刷新通过 `singleflight` 合并。
+- 刷新失败后短期退避，避免上游故障时每个价格请求都触发远程访问。
+- 管理员分组同步等待一次最新目录，不使用 stale-while-revalidate 的旧值。
+- 分组同步在同一事务中更新 `GroupRatio`、`UserUsableGroups` 和 `AutoGroups`。
+- 同步仅保留至少有一个启用本地渠道的分组，并拒绝非正数、NaN、Inf 或过大的倍率。
 
-模型广场还会读取 DeepKey 公开定价目录并缓存 15 分钟，使尚未配置渠道时也能浏览全部上游模型。目录模型统一标记为“仅目录”，价格按 30% 加价展示；本地已有同名模型时以本地渠道和本地定价为准。公开目录不会写入 `abilities`，因此不会绕过渠道可用性校验。
+## 可复核审计
 
-## 客户 Key 与上游 Key
+使用脱敏脚本读取 DeepKey 当前公开目录、Relay 渠道列表，并通过 Relay 的模型探测接口核对每个 DeepKey 渠道。脚本不会读取或输出渠道 Key，结果包含 UTC 时间、Relay 版本和 SHA-256：
 
-无需建立重复的 Key 映射表。客户创建、修改、禁用和删除的是 `tokens` 中的本地随机 Key；请求通过本地 Token 鉴权后，再由渠道选择逻辑读取管理员预配置的 DeepKey Key 并替换上游鉴权信息。上游 Key 不返回给客户，也不复制到客户 Token 记录。
+```powershell
+./.specs/001-relay-foundation/audit-deepkey-production.ps1 `
+  -RelayBaseUrl https://relay.example.com `
+  -AdminAccessToken $env:RELAY_ADMIN_ACCESS_TOKEN `
+  -AdminUserId 1
+```
 
-## 外部导航
-
-- `general_setting.docs_link`：配置文档站地址。
-- `general_setting.monitor_link`：分组监控站地址。
-- `HeaderNavModules.docs` 与 `HeaderNavModules.monitor`：分别控制两个顶部入口是否显示。
-- 两个入口均以外部链接打开，不复制或嵌入 DeepKey 文档和监控站源码。
-
-## 分组同步
-
-- Root 管理员可在“系统设置 -> 模型设置 -> 分组倍率”中同步 DeepKey 当前的分组目录。
-- 同步会以一个事务替换 `GroupRatio`、`UserUsableGroups` 和 `AutoGroups`，使密钥创建页的名称、说明和倍率与本次上游目录一致。
-- 同步完成后只读取 Relay 的本地设置；管理员仍可在可视化编辑器中新增、修改或删除分组，上游后续变化不会自动覆盖本地配置。
-- 再次同步属于显式覆盖操作，界面必须二次确认。
-
-公开目录中的模型不代表任意 DeepKey Key 均有权调用。不同分组可能对应不同模型集合和成本倍率；启用渠道前必须以专用 Key 的实际授权和调用测试为准。
-
-## 兼容性
-
-DeepKey 的价格接口曾返回过 JSON 字符串封装的 JSON 文档。同步器同时接受标准 JSON 对象和该双重编码格式。
-
-## 2026-07-22 验证快照
-
-- 上游返回 `226` 个模型，其中 `214` 个按 Token 计费、`12` 个按次计费。
-- 返回 `7` 个供应商和 `8` 类端点。
-- `gpt-3.5-turbo` 输入倍率由 `0.25` 加价为 `0.325`，输出倍率保持 `0.25`。
-- 后端定向单元测试通过。
-- 前端 TypeScript 类型检查、变更文件 lint、生产构建通过。
-- 全仓 lint 存在与本次改动无关的既有错误，不作为本功能验收项。
+目录、分组和渠道数量以脚本当次输出为准，不在规格中固定，也不作为自动化测试的替代品。

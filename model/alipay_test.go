@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -72,6 +73,22 @@ func TestCompleteAlipayTopUp_IsIdempotentAcrossNotifications(t *testing.T) {
 	assert.Equal(t, expectedQuota, getUserQuotaForPaymentGuardTest(t, 701))
 }
 
+func TestReleaseAlipayClientRequestForRetryRetiresFailedOrder(t *testing.T) {
+	truncateTables(t)
+	insertAlipayOrderForTest(t, 706, "alipay-retry", 199, 2)
+	require.NoError(t, DB.Model(&AlipayOrder{}).
+		Where("out_trade_no = ?", "alipay-retry").
+		Update("status", AlipayOrderStatusFailed).Error)
+
+	require.NoError(t, ReleaseAlipayClientRequestForRetry(706, "request_alipay_123456"))
+
+	var order AlipayOrder
+	require.NoError(t, DB.Where("out_trade_no = ?", "alipay-retry").First(&order).Error)
+	assert.Equal(t, AlipayOrderStatusFailed, order.Status)
+	assert.NotEqual(t, "request_alipay_123456", order.ClientRequestId)
+	assert.Equal(t, "retired-alipay-"+fmt.Sprint(order.Id), order.ClientRequestId)
+}
+
 func TestCompleteAlipayTopUp_RejectsAmountMismatch(t *testing.T) {
 	truncateTables(t)
 	insertAlipayOrderForTest(t, 702, "alipay-amount-mismatch", 299, 2)
@@ -89,6 +106,30 @@ func TestCompleteAlipayTopUp_RejectsAmountMismatch(t *testing.T) {
 	assert.False(t, credited)
 	assert.Equal(t, 0, getUserQuotaForPaymentGuardTest(t, 702))
 	assert.Equal(t, common.TopUpStatusPending, getTopUpStatusForPaymentGuardTest(t, "alipay-amount-mismatch"))
+
+	var notificationCount int64
+	require.NoError(t, DB.Model(&AlipayNotification{}).Count(&notificationCount).Error)
+	assert.Zero(t, notificationCount)
+}
+
+func TestCompleteAlipayTopUp_RejectsCumulativeQuotaOverflow(t *testing.T) {
+	truncateTables(t)
+	insertAlipayOrderForTest(t, 705, "alipay-quota-overflow", 299, 2)
+	require.NoError(t, DB.Model(&User{}).Where("id = ?", 705).Update("quota", common.MaxQuota-1).Error)
+
+	credited, err := CompleteAlipayTopUp(AlipayCompletion{
+		EventID:     "notify-quota-overflow",
+		OutTradeNo:  "alipay-quota-overflow",
+		TradeNo:     "trade-quota-overflow",
+		AmountFen:   299,
+		Currency:    "CNY",
+		SuccessTime: time.Now(),
+		BodyDigest:  "digest-quota-overflow",
+	})
+	require.Error(t, err)
+	assert.False(t, credited)
+	assert.Equal(t, common.MaxQuota-1, getUserQuotaForPaymentGuardTest(t, 705))
+	assert.Equal(t, common.TopUpStatusPending, getTopUpStatusForPaymentGuardTest(t, "alipay-quota-overflow"))
 
 	var notificationCount int64
 	require.NoError(t, DB.Model(&AlipayNotification{}).Count(&notificationCount).Error)

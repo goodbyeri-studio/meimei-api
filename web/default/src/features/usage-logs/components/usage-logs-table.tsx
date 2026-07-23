@@ -19,7 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
-import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -28,12 +27,12 @@ import {
   DataTableRow,
   useDataTable,
 } from '@/components/data-table'
+import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { cn } from '@/lib/utils'
 
 import {
   COMMON_LOG_DISPLAY_LIMIT,
-  DEFAULT_BILLING_LOG_TYPE_VALUE,
   DEFAULT_LOGS_DATA,
   LOG_TYPE_ALL_VALUE,
   LOG_TYPE_ENUM,
@@ -66,11 +65,13 @@ function getColumnVisibilityStorageKey(
 }
 
 function deserializeLogTypeFilter(value: unknown): unknown[] {
-  let values: unknown[] = []
+  let values: unknown[]
   if (Array.isArray(value)) {
     values = value
   } else if (value) {
     values = [value]
+  } else {
+    values = []
   }
   return values.filter((item) => String(item) !== LOG_TYPE_ALL_VALUE)
 }
@@ -82,11 +83,8 @@ interface UsageLogsTableProps {
 export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   const { t } = useTranslation()
   const { isAdminView: isAdmin } = useLogsViewScope()
+  const isMobile = useMediaQuery('(max-width: 640px)')
   const searchParams = route.useSearch()
-  const effectiveSearchParams = useMemo(() => {
-    if (logCategory !== 'common' || searchParams.type) return searchParams
-    return { ...searchParams, type: [DEFAULT_BILLING_LOG_TYPE_VALUE] }
-  }, [logCategory, searchParams])
 
   const {
     columnFilters,
@@ -97,7 +95,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   } = useTableUrlState({
     search: route.useSearch(),
     navigate: route.useNavigate(),
-    pagination: { defaultPage: 1, defaultPageSize: 10 },
+    pagination: { defaultPage: 1, defaultPageSize: isMobile ? 20 : 100 },
     globalFilter: { enabled: false },
     columnFilters: [
       {
@@ -134,7 +132,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
       pagination.pageIndex + 1,
       pagination.pageSize,
       columnFilters,
-      effectiveSearchParams,
+      searchParams,
       t,
     ],
     queryFn: async () => {
@@ -143,7 +141,7 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
         isAdmin,
         page: pagination.pageIndex + 1,
         pageSize: pagination.pageSize,
-        searchParams: effectiveSearchParams,
+        searchParams,
         columnFilters,
       })
 

@@ -13,8 +13,10 @@ import (
 	"github.com/bytedance/gopkg/util/gopool"
 )
 
-const logRetentionInterval = 5 * time.Minute
-const consumeLogRetentionBatchSize = 1000
+const (
+	logRetentionInterval         = 5 * time.Minute
+	consumeLogRetentionBatchSize = 1000
+)
 
 var logRetentionTaskOnce sync.Once
 

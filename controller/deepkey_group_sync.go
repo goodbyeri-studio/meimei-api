@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const deepKeyMaxGroupRatio = 1000
+
 type deepKeyGroupSyncData struct {
 	GroupRatio       map[string]float64 `json:"group_ratio"`
 	UserUsableGroups map[string]string  `json:"user_usable_groups"`
@@ -18,7 +21,7 @@ type deepKeyGroupSyncData struct {
 	Count            int                `json:"count"`
 }
 
-func buildDeepKeyGroupSyncData(catalog *deepKeyPricingCatalog) (*deepKeyGroupSyncData, error) {
+func buildDeepKeyGroupSyncData(catalog *deepKeyPricingCatalog, enabledChannelGroups map[string]struct{}) (*deepKeyGroupSyncData, error) {
 	if catalog == nil || len(catalog.GroupRatio) == 0 {
 		return nil, fmt.Errorf("DeepKey pricing returned no groups")
 	}
@@ -30,8 +33,11 @@ func buildDeepKeyGroupSyncData(catalog *deepKeyPricingCatalog) (*deepKeyGroupSyn
 		if name == "" {
 			continue
 		}
-		if ratio < 0 {
-			return nil, fmt.Errorf("DeepKey group %q has a negative ratio", name)
+		if ratio <= 0 || math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio > deepKeyMaxGroupRatio {
+			return nil, fmt.Errorf("DeepKey group %q ratio must be within (0, %d]", name, deepKeyMaxGroupRatio)
+		}
+		if _, enabled := enabledChannelGroups[name]; !enabled {
+			continue
 		}
 
 		description := strings.TrimSpace(catalog.UsableGroup[rawName])
@@ -42,7 +48,7 @@ func buildDeepKeyGroupSyncData(catalog *deepKeyPricingCatalog) (*deepKeyGroupSyn
 		userUsableGroups[name] = description
 	}
 	if len(groupRatio) == 0 {
-		return nil, fmt.Errorf("DeepKey pricing returned no valid groups")
+		return nil, fmt.Errorf("DeepKey pricing has no groups backed by enabled local channels")
 	}
 
 	autoGroups := make([]string, 0, len(catalog.AutoGroups))
@@ -68,13 +74,18 @@ func buildDeepKeyGroupSyncData(catalog *deepKeyPricingCatalog) (*deepKeyGroupSyn
 }
 
 func SyncDeepKeyGroups(c *gin.Context) {
-	catalog, err := getDeepKeyPricingCatalog()
+	catalog, err := refreshDeepKeyPricingCatalog()
 	if err != nil {
 		common.ApiErrorMsg(c, "获取 DeepKey 分组失败: "+err.Error())
 		return
 	}
 
-	data, err := buildDeepKeyGroupSyncData(catalog)
+	enabledChannelGroups, err := model.GetEnabledChannelGroups()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	data, err := buildDeepKeyGroupSyncData(catalog, enabledChannelGroups)
 	if err != nil {
 		common.ApiErrorMsg(c, err.Error())
 		return
@@ -95,12 +106,11 @@ func SyncDeepKeyGroups(c *gin.Context) {
 		return
 	}
 
-	err = model.UpdateOptionsBulk(map[string]string{
+	if err := model.UpdateOptionsBulk(map[string]string{
 		"GroupRatio":       string(groupRatioJSON),
 		"UserUsableGroups": string(userUsableGroupsJSON),
 		"AutoGroups":       string(autoGroupsJSON),
-	})
-	if err != nil {
+	}); err != nil {
 		common.ApiError(c, err)
 		return
 	}

@@ -706,14 +706,6 @@ func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	return token
 }
 
-func CountOldLog(ctx context.Context, targetTimestamp int64) (int64, error) {
-	var total int64
-	if err := LOG_DB.WithContext(ctx).Model(&Log{}).Where("created_at < ?", targetTimestamp).Count(&total).Error; err != nil {
-		return 0, err
-	}
-	return total, nil
-}
-
 func DeleteExpiredConsumeLogs(ctx context.Context, targetTimestamp int64, limit int) (int64, error) {
 	if targetTimestamp <= 0 {
 		return 0, nil
@@ -756,6 +748,14 @@ func DeleteExpiredConsumeLogs(ctx context.Context, targetTimestamp int64, limit 
 
 	result := LOG_DB.WithContext(ctx).Where("id IN ?", ids).Delete(&Log{})
 	return result.RowsAffected, result.Error
+}
+
+func CountOldLog(ctx context.Context, targetTimestamp int64) (int64, error) {
+	var total int64
+	if err := LOG_DB.WithContext(ctx).Model(&Log{}).Where("created_at < ?", targetTimestamp).Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func DeleteOldLogBatch(ctx context.Context, targetTimestamp int64, limit int) (int64, error) {
