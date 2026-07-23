@@ -2,7 +2,9 @@ package model
 
 import (
 	"testing"
+	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,4 +43,49 @@ func TestSeedDefaultCNYSubscriptionPlansPreservesAdminCatalog(t *testing.T) {
 	require.NoError(t, DB.Find(&plans).Error)
 	require.Len(t, plans, 1)
 	assert.Equal(t, customPlan.Title, plans[0].Title)
+}
+
+func TestCreatePendingSubscriptionOrderReservesPurchaseLimit(t *testing.T) {
+	truncateTables(t)
+
+	user := &User{Username: "subscription-reservation-user", Status: common.UserStatusEnabled}
+	require.NoError(t, DB.Create(user).Error)
+	plan := &SubscriptionPlan{
+		Title:              "限购套餐",
+		PriceAmount:        10,
+		Currency:           "CNY",
+		DurationUnit:       SubscriptionDurationMonth,
+		DurationValue:      1,
+		Enabled:            true,
+		MaxPurchasePerUser: 1,
+		QuotaResetPeriod:   SubscriptionResetNever,
+	}
+	require.NoError(t, DB.Create(plan).Error)
+
+	first := &SubscriptionOrder{
+		UserId:          user.Id,
+		PlanId:          plan.Id,
+		Money:           plan.PriceAmount,
+		TradeNo:         "subscription-reservation-first",
+		PaymentMethod:   PaymentMethodWechatNative,
+		PaymentProvider: PaymentProviderWechatSubscription,
+		Status:          common.TopUpStatusPending,
+		CreateTime:      time.Now().Unix(),
+	}
+	require.NoError(t, CreatePendingSubscriptionOrder(first))
+
+	second := &SubscriptionOrder{
+		UserId:          user.Id,
+		PlanId:          plan.Id,
+		Money:           plan.PriceAmount,
+		TradeNo:         "subscription-reservation-second",
+		PaymentMethod:   PaymentMethodWechatNative,
+		PaymentProvider: PaymentProviderWechatSubscription,
+		Status:          common.TopUpStatusPending,
+		CreateTime:      time.Now().Unix(),
+	}
+	require.ErrorIs(t, CreatePendingSubscriptionOrder(second), ErrSubscriptionPurchaseLimit)
+
+	require.NoError(t, DB.Model(first).Update("status", common.TopUpStatusFailed).Error)
+	require.NoError(t, CreatePendingSubscriptionOrder(second))
 }

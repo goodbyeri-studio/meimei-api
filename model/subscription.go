@@ -36,6 +36,7 @@ const (
 var (
 	ErrSubscriptionOrderNotFound      = errors.New("subscription order not found")
 	ErrSubscriptionOrderStatusInvalid = errors.New("subscription order status invalid")
+	ErrSubscriptionPurchaseLimit      = errors.New("已达到该套餐购买上限")
 )
 
 const (
@@ -232,6 +233,50 @@ func (o *SubscriptionOrder) Insert() error {
 		o.CreateTime = common.GetTimestamp()
 	}
 	return DB.Create(o).Error
+}
+
+// reserveSubscriptionPurchaseSlotTx serializes plan purchases for one user and
+// counts pending external orders as reserved purchase slots.
+func reserveSubscriptionPurchaseSlotTx(tx *gorm.DB, userID int, planID int) error {
+	if userID <= 0 || planID <= 0 {
+		return errors.New("invalid subscription purchase order")
+	}
+	var user User
+	if err := lockForUpdate(tx).Where("id = ?", userID).First(&user).Error; err != nil {
+		return err
+	}
+	plan, err := getSubscriptionPlanByIdTx(tx, planID)
+	if err != nil {
+		return err
+	}
+	if plan.MaxPurchasePerUser <= 0 {
+		return nil
+	}
+	var count int64
+	if err := tx.Model(&SubscriptionOrder{}).
+		Where("user_id = ? AND plan_id = ? AND status IN ?", userID, planID,
+			[]string{common.TopUpStatusPending, common.TopUpStatusSuccess}).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count >= int64(plan.MaxPurchasePerUser) {
+		return ErrSubscriptionPurchaseLimit
+	}
+	return nil
+}
+
+// CreatePendingSubscriptionOrder atomically reserves a purchase slot before
+// persisting an external-payment order.
+func CreatePendingSubscriptionOrder(order *SubscriptionOrder) error {
+	if order == nil || order.Status != common.TopUpStatusPending {
+		return errors.New("invalid pending subscription order")
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := reserveSubscriptionPurchaseSlotTx(tx, order.UserId, order.PlanId); err != nil {
+			return err
+		}
+		return tx.Create(order).Error
+	})
 }
 
 func (o *SubscriptionOrder) Update() error {

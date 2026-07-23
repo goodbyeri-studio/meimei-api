@@ -67,17 +67,6 @@ func SubscriptionRequestWechatPay(c *gin.Context) {
 		common.ApiErrorMsg(c, "微信支付仅支持人民币套餐")
 		return
 	}
-	if plan.MaxPurchasePerUser > 0 {
-		count, countErr := model.CountUserSubscriptionsByPlan(userID, plan.Id)
-		if countErr != nil {
-			common.ApiError(c, countErr)
-			return
-		}
-		if count >= int64(plan.MaxPurchasePerUser) {
-			common.ApiErrorMsg(c, "已达到该套餐购买上限")
-			return
-		}
-	}
 	amountFen, err := wechatPayAmountFen(plan.PriceAmount)
 	if err != nil {
 		common.ApiError(c, err)
@@ -117,6 +106,10 @@ func SubscriptionRequestWechatPay(c *gin.Context) {
 	if err := model.CreateSubscriptionWechatPayOrder(subscriptionOrder, order); err != nil {
 		if duplicateOrder, lookupErr := model.GetSubscriptionWechatPayOrderByClientRequest(userID, req.ClientRequestID); lookupErr == nil {
 			writeSubscriptionWechatPayResponse(c, duplicateOrder)
+			return
+		}
+		if errors.Is(err, model.ErrSubscriptionPurchaseLimit) {
+			common.ApiErrorMsg(c, err.Error())
 			return
 		}
 		logger.LogError(c.Request.Context(), fmt.Sprintf("微信支付创建套餐订单失败 user_id=%d plan_id=%d error=%q", userID, plan.Id, err.Error()))

@@ -137,6 +137,9 @@ func CreateSubscriptionWechatPayOrder(subscriptionOrder *SubscriptionOrder, orde
 		return errors.New("invalid subscription wechat order")
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := reserveSubscriptionPurchaseSlotTx(tx, subscriptionOrder.UserId, subscriptionOrder.PlanId); err != nil {
+			return err
+		}
 		if err := tx.Create(subscriptionOrder).Error; err != nil {
 			return err
 		}
