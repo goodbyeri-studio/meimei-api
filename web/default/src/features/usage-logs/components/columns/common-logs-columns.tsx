@@ -62,6 +62,8 @@ import {
 import type { LogOtherData } from '../../types'
 import { DetailsDialog } from '../dialogs/details-dialog'
 import { ModelBadge } from '../model-badge'
+import { getCommonLogColumnOrder } from '../usage-log-column-order'
+import { UsageLogCostCell } from '../usage-log-cost'
 import { useUsageLogsContext } from '../usage-logs-provider'
 
 interface DetailSegment {
@@ -718,6 +720,20 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
     },
 
     {
+      id: 'quota',
+      accessorKey: 'quota',
+      header: t('Cost'),
+      cell: ({ row }) => (
+        <UsageLogCostCell
+          log={row.original}
+          subscriptionLabel={t('Subscription')}
+          deductedBySubscriptionLabel={t('Deducted by subscription')}
+        />
+      ),
+      size: 130,
+    },
+
+    {
       id: 'content',
       accessorKey: 'content',
       header: t('Details'),
@@ -784,20 +800,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
     }
   )
 
-  const deepKeyColumnOrder = [
-    'created_at',
-    'token_name',
-    'group',
-    'type',
-    'model_name',
-    'use_time',
-    'prompt_tokens',
-    'completion_tokens',
-    'cache_tokens',
-    'content',
-  ]
-
-  return deepKeyColumnOrder.flatMap((columnId) => {
+  return getCommonLogColumnOrder(isAdmin).flatMap((columnId) => {
     const column = columns.find((item) => item.id === columnId)
     return column ? [column] : []
   })

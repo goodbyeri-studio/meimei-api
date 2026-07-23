@@ -145,16 +145,23 @@ function CommonLogsCard<TData>({
 
   const modelCell = cells.get('model_name')
   const typeCell = cells.get('type')
+  const quotaCell = cells.get('quota')
 
   return (
     <div className='space-y-2.5'>
       <div className='flex min-w-0 items-center justify-between gap-3'>
         <CompactCell cell={modelCell} className='flex-1' />
         <CompactCell cell={typeCell} className='shrink-0 text-right' />
+        <CompactCell
+          cell={quotaCell}
+          className='shrink-0 text-right [&_.flex-col]:items-end'
+        />
       </div>
 
       <div className='grid grid-cols-2 gap-1.5'>
         <SummaryField label={t('Time')} cell={cells.get('created_at')} />
+        <SummaryField label={t('User')} cell={cells.get('user')} />
+        <SummaryField label={t('Channel')} cell={cells.get('channel')} />
         <SummaryField
           label={t('Token')}
           cell={cells.get('token_name')}
