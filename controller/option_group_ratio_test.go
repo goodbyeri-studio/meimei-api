@@ -42,3 +42,22 @@ func TestNormalizeGroupRatioOptionsRejectsNullCollections(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "GroupRatio")
 }
+
+func TestValidateGroupRemovalSafetyRejectsGroupsUsedByCustomerTokens(t *testing.T) {
+	err := validateGroupRemovalSafety(
+		map[string]float64{"kept-group": 1, "in-use-group": 1},
+		map[string]float64{"kept-group": 1},
+		func(groups []string) (map[string]int64, error) {
+			require.ElementsMatch(t, []string{"in-use-group"}, groups)
+			return map[string]int64{"in-use-group": 2}, nil
+		},
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "in-use-group")
+
+	require.NoError(t, validateGroupRemovalSafety(
+		map[string]float64{"kept-group": 1, "unused-group": 1},
+		map[string]float64{"kept-group": 1},
+		func([]string) (map[string]int64, error) { return map[string]int64{}, nil },
+	))
+}

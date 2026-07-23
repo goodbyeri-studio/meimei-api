@@ -24,6 +24,19 @@ type DeepKeyPricingMigrationSnapshot struct {
 	Migration  string             `json:"migration"`
 }
 
+type DeepKeyChannelGroupStatus struct {
+	Group                 string `json:"group"`
+	ChannelCount          int    `json:"channel_count"`
+	EnabledChannelCount   int    `json:"enabled_channel_count"`
+	DisabledChannelCount  int    `json:"disabled_channel_count"`
+	ModelCount            int    `json:"model_count"`
+	TokenCount            int64  `json:"token_count"`
+	KeyFingerprint        string `json:"key_fingerprint"`
+	KeyConfigurationValid bool   `json:"key_configuration_valid"`
+	LastTestTime          int64  `json:"last_test_time"`
+	ResponseTime          int    `json:"response_time"`
+}
+
 func (snapshot DeepKeyPricingMigrationSnapshot) Hash() (string, error) {
 	encoded, err := common.Marshal(snapshot)
 	if err != nil {
@@ -155,6 +168,110 @@ func GetEnabledDeepKeyChannelGroups() (map[string]struct{}, error) {
 		return nil, err
 	}
 	return validateDeepKeyChannelSet(channels)
+}
+
+func GetDeepKeyChannelGroupStatuses() (map[string]DeepKeyChannelGroupStatus, error) {
+	var channels []Channel
+	if err := DB.Find(&channels).Error; err != nil {
+		return nil, err
+	}
+
+	statuses := make(map[string]DeepKeyChannelGroupStatus)
+	modelsByGroup := make(map[string]map[string]struct{})
+	keysByGroup := make(map[string]map[string]struct{})
+	keyConfigurationValidByGroup := make(map[string]bool)
+	for i := range channels {
+		channel := &channels[i]
+		if !IsDeepKeyBaseURL(channel.GetBaseURL()) {
+			continue
+		}
+		keys := make([]string, 0)
+		for _, key := range channel.GetKeys() {
+			key = strings.TrimSpace(key)
+			if key != "" {
+				keys = append(keys, key)
+			}
+		}
+		for _, group := range channel.GetGroups() {
+			group = strings.TrimSpace(group)
+			if group == "" {
+				continue
+			}
+			status := statuses[group]
+			status.Group = group
+			status.ChannelCount++
+			if channel.Status == common.ChannelStatusEnabled {
+				status.EnabledChannelCount++
+			} else {
+				status.DisabledChannelCount++
+			}
+			if channel.TestTime > status.LastTestTime {
+				status.LastTestTime = channel.TestTime
+				status.ResponseTime = channel.ResponseTime
+			}
+			statuses[group] = status
+
+			if modelsByGroup[group] == nil {
+				modelsByGroup[group] = make(map[string]struct{})
+			}
+			for _, modelName := range channel.GetModels() {
+				modelName = strings.TrimSpace(modelName)
+				if modelName != "" {
+					modelsByGroup[group][modelName] = struct{}{}
+				}
+			}
+			if keysByGroup[group] == nil {
+				keysByGroup[group] = make(map[string]struct{})
+				keyConfigurationValidByGroup[group] = true
+			}
+			if len(keys) != 1 {
+				keyConfigurationValidByGroup[group] = false
+			}
+			for _, key := range keys {
+				keysByGroup[group][key] = struct{}{}
+			}
+		}
+	}
+
+	tokenCounts, err := CountTokensByGroups(nil)
+	if err != nil {
+		return nil, err
+	}
+	for group, status := range statuses {
+		status.ModelCount = len(modelsByGroup[group])
+		status.TokenCount = tokenCounts[group]
+		if len(keysByGroup[group]) == 1 {
+			for key := range keysByGroup[group] {
+				digest := sha256.Sum256([]byte(key))
+				status.KeyFingerprint = hex.EncodeToString(digest[:])[:16]
+			}
+		}
+		status.KeyConfigurationValid = keyConfigurationValidByGroup[group] && len(keysByGroup[group]) == 1
+		statuses[group] = status
+	}
+	return statuses, nil
+}
+
+func CountTokensByGroups(groups []string) (map[string]int64, error) {
+	type tokenGroupCount struct {
+		Group string `gorm:"column:group_name"`
+		Count int64  `gorm:"column:token_count"`
+	}
+	var counts []tokenGroupCount
+	query := DB.Model(&Token{}).
+		Select(commonGroupCol + " AS group_name, COUNT(*) AS token_count").
+		Where(commonGroupCol + " <> ''")
+	if len(groups) > 0 {
+		query = query.Where(commonGroupCol+" IN ?", groups)
+	}
+	if err := query.Group("group").Find(&counts).Error; err != nil {
+		return nil, err
+	}
+	result := make(map[string]int64, len(counts))
+	for _, count := range counts {
+		result[count.Group] = count.Count
+	}
+	return result, nil
 }
 
 func ValidateDeepKeyChannelGroupIsolation(candidate *Channel) error {

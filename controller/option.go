@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -228,6 +229,36 @@ func normalizeEmptyJSON(value, emptyValue string) string {
 		return emptyValue
 	}
 	return strings.TrimSpace(value)
+}
+
+func validateGroupRemovalSafety(
+	currentGroupRatio, nextGroupRatio map[string]float64,
+	countTokens func([]string) (map[string]int64, error),
+) error {
+	removedGroups := make([]string, 0)
+	for group := range currentGroupRatio {
+		if _, exists := nextGroupRatio[group]; !exists {
+			removedGroups = append(removedGroups, group)
+		}
+	}
+	if len(removedGroups) == 0 {
+		return nil
+	}
+	tokenCounts, err := countTokens(removedGroups)
+	if err != nil {
+		return err
+	}
+	groupsInUse := make([]string, 0, len(tokenCounts))
+	for group, count := range tokenCounts {
+		if count > 0 {
+			groupsInUse = append(groupsInUse, group)
+		}
+	}
+	if len(groupsInUse) == 0 {
+		return nil
+	}
+	sort.Strings(groupsInUse)
+	return fmt.Errorf("以下分组仍被客户 Token 使用，不能删除: %s", strings.Join(groupsInUse, ", "))
 }
 
 func UpdateOption(c *gin.Context) {
@@ -468,6 +499,19 @@ func UpdateGroupRatioOptions(c *gin.Context) {
 	}
 	values, err := normalizeGroupRatioOptions(request)
 	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	nextGroupRatio := make(map[string]float64)
+	if err := common.UnmarshalJsonStr(values["GroupRatio"], &nextGroupRatio); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := validateGroupRemovalSafety(
+		ratio_setting.GetGroupRatioCopy(),
+		nextGroupRatio,
+		model.CountTokensByGroups,
+	); err != nil {
 		common.ApiErrorMsg(c, err.Error())
 		return
 	}
