@@ -256,6 +256,21 @@ jobs:
           ssh "${ssh_args[@]}" "$PROD_DEPLOY_USER@$PROD_HOST" "mkdir -p '$PROD_APP_ROOT'"
           scp "${ssh_args[@]}" deploy/production/deploy.sh deploy/production/docker-compose.yml \
             "$PROD_DEPLOY_USER@$PROD_HOST:$PROD_APP_ROOT/"
+      - name: Authenticate production host to DOCR
+        env:
+          DOCR_TOKEN: ${{ secrets.DOCR_PUSH_TOKEN }}
+          PROD_HOST: ${{ vars.PROD_HOST }}
+          PROD_DEPLOY_USER: ${{ vars.PROD_DEPLOY_USER }}
+        run: |
+          [[ -n "$DOCR_TOKEN" ]] || {
+            echo '::error::DOCR_PUSH_TOKEN is missing'
+            exit 1
+          }
+          ssh_args=(-i "$HOME/.ssh/meimei-api-deploy" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          # Use the conventional DOCR username and send the token over stdin so
+          # it is not persisted in the workflow script or remote command line.
+          printf '%s\n' "$DOCR_TOKEN" | ssh "${ssh_args[@]}" "$PROD_DEPLOY_USER@$PROD_HOST" \
+            "docker login registry.digitalocean.com --username doctl --password-stdin"
       - name: Run deployment or rollback
         env:
           OPERATION: ${{ inputs.operation }}
