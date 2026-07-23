@@ -1,14 +1,27 @@
 package model
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/bytedance/gopkg/util/gopool"
 	"gorm.io/gorm"
+)
+
+const (
+	MaxTokenNameLength      = 50
+	tokenNameMigrationBatch = 200
+	tokenNameUniqueIndex    = "idx_tokens_user_name_fingerprint"
+)
+
+var (
+	ErrTokenNameEmpty   = errors.New("token name cannot be empty")
+	ErrTokenNameTooLong = errors.New("token name is too long")
 )
 
 type Token struct {
@@ -17,6 +30,7 @@ type Token struct {
 	Key                string         `json:"key" gorm:"type:varchar(128);uniqueIndex"`
 	Status             int            `json:"status" gorm:"default:1"`
 	Name               string         `json:"name" gorm:"index" `
+	NameFingerprint    string         `json:"-" gorm:"type:char(64);not null;default:''"`
 	CreatedTime        int64          `json:"created_time" gorm:"bigint"`
 	AccessedTime       int64          `json:"accessed_time" gorm:"bigint"`
 	ExpiredTime        int64          `json:"expired_time" gorm:"bigint;default:-1"` // -1 means never expired
@@ -29,6 +43,78 @@ type Token struct {
 	Group              string         `json:"group" gorm:"default:''"`
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
+}
+
+type tokenNameUniqueIndexModel struct {
+	UserId          int    `gorm:"column:user_id;uniqueIndex:idx_tokens_user_name_fingerprint,priority:1"`
+	NameFingerprint string `gorm:"column:name_fingerprint;uniqueIndex:idx_tokens_user_name_fingerprint,priority:2"`
+}
+
+func (tokenNameUniqueIndexModel) TableName() string {
+	return "tokens"
+}
+
+func NormalizeTokenName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", ErrTokenNameEmpty
+	}
+	if utf8.RuneCountInString(name) > MaxTokenNameLength {
+		return "", ErrTokenNameTooLong
+	}
+	return name, nil
+}
+
+func tokenNameFingerprint(name string) string {
+	digest := sha256.Sum256([]byte("active\x00" + name))
+	return fmt.Sprintf("%x", digest)
+}
+
+func deletedTokenNameFingerprint(id int) string {
+	digest := sha256.Sum256([]byte(fmt.Sprintf("deleted\x00%d", id)))
+	return fmt.Sprintf("%x", digest)
+}
+
+func truncateTokenName(name string, maxLength int) string {
+	runes := []rune(name)
+	if len(runes) <= maxLength {
+		return name
+	}
+	return string(runes[:maxLength])
+}
+
+func normalizeLegacyTokenName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "API Key"
+	}
+	return strings.TrimSpace(truncateTokenName(name, MaxTokenNameLength))
+}
+
+func (token *Token) prepareName() error {
+	name, err := NormalizeTokenName(token.Name)
+	if err != nil {
+		return err
+	}
+	token.Name = name
+	token.NameFingerprint = tokenNameFingerprint(name)
+	return nil
+}
+
+func (token *Token) BeforeCreate(_ *gorm.DB) error {
+	return token.prepareName()
+}
+
+func (token *Token) BeforeDelete(tx *gorm.DB) error {
+	if token.Id <= 0 {
+		return nil
+	}
+	fingerprint := deletedTokenNameFingerprint(token.Id)
+	if err := tx.Model(&Token{}).Where("id = ?", token.Id).UpdateColumn("name_fingerprint", fingerprint).Error; err != nil {
+		return err
+	}
+	token.NameFingerprint = fingerprint
+	return nil
 }
 
 func (token *Token) Clean() {
@@ -242,6 +328,120 @@ func GetTokenByIds(id int, userId int) (*Token, error) {
 	return &token, err
 }
 
+func IsTokenNameTaken(userId int, name string, excludeTokenId int) (bool, error) {
+	name, err := NormalizeTokenName(name)
+	if err != nil {
+		return false, err
+	}
+	query := DB.Model(&Token{}).Where("user_id = ? AND name_fingerprint = ?", userId, tokenNameFingerprint(name))
+	if excludeTokenId > 0 {
+		query = query.Where("id <> ?", excludeTokenId)
+	}
+	var count int64
+	err = query.Count(&count).Error
+	return count > 0, err
+}
+
+func migrateDuplicateTokenNames(db *gorm.DB) error {
+	if db.Migrator().HasIndex(&Token{}, tokenNameUniqueIndex) {
+		return nil
+	}
+
+	lastUserId := -1
+	for {
+		var userIds []int
+		if err := db.Unscoped().Model(&Token{}).
+			Distinct("user_id").
+			Where("user_id > ?", lastUserId).
+			Order("user_id asc").
+			Limit(tokenNameMigrationBatch).
+			Pluck("user_id", &userIds).Error; err != nil {
+			return fmt.Errorf("failed to load token owners: %w", err)
+		}
+		if len(userIds) == 0 {
+			break
+		}
+
+		for _, userId := range userIds {
+			if err := db.Transaction(func(tx *gorm.DB) error {
+				var tokens []Token
+				if err := lockForUpdate(tx.Unscoped()).Where("user_id = ?", userId).Order("id asc").Find(&tokens).Error; err != nil {
+					return fmt.Errorf("failed to load token names for user %d: %w", userId, err)
+				}
+
+				reservedNames := make(map[string]struct{})
+				for i := range tokens {
+					if tokens[i].DeletedAt.Valid {
+						continue
+					}
+					reservedNames[normalizeLegacyTokenName(tokens[i].Name)] = struct{}{}
+				}
+
+				seenNames := make(map[string]struct{})
+				for i := range tokens {
+					token := &tokens[i]
+					if token.DeletedAt.Valid {
+						fingerprint := deletedTokenNameFingerprint(token.Id)
+						if token.NameFingerprint != fingerprint {
+							if err := tx.Unscoped().Model(&Token{}).Where("id = ?", token.Id).
+								Update("name_fingerprint", fingerprint).Error; err != nil {
+								return fmt.Errorf("failed to migrate deleted token %d: %w", token.Id, err)
+							}
+						}
+						continue
+					}
+
+					name := normalizeLegacyTokenName(token.Name)
+					targetName := name
+					if _, exists := seenNames[name]; exists {
+						for suffix := 2; ; suffix++ {
+							suffixText := fmt.Sprintf(" (%d)", suffix)
+							baseLength := MaxTokenNameLength - utf8.RuneCountInString(suffixText)
+							candidate := strings.TrimSpace(truncateTokenName(name, baseLength)) + suffixText
+							if _, reserved := reservedNames[candidate]; reserved {
+								continue
+							}
+							targetName = candidate
+							reservedNames[candidate] = struct{}{}
+							break
+						}
+					}
+					seenNames[name] = struct{}{}
+
+					fingerprint := tokenNameFingerprint(targetName)
+					if token.Name == targetName && token.NameFingerprint == fingerprint {
+						continue
+					}
+					if err := tx.Model(&Token{}).Where("id = ?", token.Id).Updates(map[string]any{
+						"name":             targetName,
+						"name_fingerprint": fingerprint,
+					}).Error; err != nil {
+						return fmt.Errorf("failed to normalize token %d name: %w", token.Id, err)
+					}
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		lastUserId = userIds[len(userIds)-1]
+	}
+
+	var missingFingerprintCount int64
+	if err := db.Unscoped().Model(&Token{}).Where("name_fingerprint = '' OR name_fingerprint IS NULL").
+		Count(&missingFingerprintCount).Error; err != nil {
+		return fmt.Errorf("failed to verify token name fingerprints: %w", err)
+	}
+	if missingFingerprintCount != 0 {
+		return fmt.Errorf("token name migration left %d rows without a fingerprint", missingFingerprintCount)
+	}
+
+	if err := db.Migrator().CreateIndex(&tokenNameUniqueIndexModel{}, tokenNameUniqueIndex); err != nil {
+		return fmt.Errorf("failed to create token name unique index: %w", err)
+	}
+	return nil
+}
+
 func GetTokenById(id int) (*Token, error) {
 	if id == 0 {
 		return nil, errors.New("id 为空！")
@@ -284,13 +484,14 @@ func GetTokenByKey(key string, fromDB bool) (token *Token, err error) {
 }
 
 func (token *Token) Insert() error {
-	var err error
-	err = DB.Create(token).Error
-	return err
+	return DB.Create(token).Error
 }
 
 // Update Make sure your token's fields is completed, because this will update non-zero values
 func (token *Token) Update() (err error) {
+	if err = token.prepareName(); err != nil {
+		return err
+	}
 	defer func() {
 		if shouldUpdateRedis(true, err) {
 			gopool.Go(func() {
@@ -301,7 +502,7 @@ func (token *Token) Update() (err error) {
 			})
 		}
 	}()
-	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
+	err = DB.Model(token).Select("name", "name_fingerprint", "status", "expired_time", "remain_quota", "unlimited_quota",
 		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry").Updates(token).Error
 	return err
 }
@@ -332,7 +533,15 @@ func (token *Token) Delete() (err error) {
 			})
 		}
 	}()
-	err = DB.Delete(token).Error
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		fingerprint := deletedTokenNameFingerprint(token.Id)
+		if err := tx.Model(&Token{}).Where("id = ?", token.Id).
+			UpdateColumn("name_fingerprint", fingerprint).Error; err != nil {
+			return err
+		}
+		token.NameFingerprint = fingerprint
+		return tx.Session(&gorm.Session{SkipHooks: true}).Delete(token).Error
+	})
 	return err
 }
 
@@ -458,6 +667,14 @@ func BatchDeleteTokens(ids []int, userId int) (int, error) {
 	if err := tx.Where("user_id = ? AND id IN (?)", userId, ids).Find(&tokens).Error; err != nil {
 		tx.Rollback()
 		return 0, err
+	}
+	for i := range tokens {
+		fingerprint := deletedTokenNameFingerprint(tokens[i].Id)
+		if err := tx.Model(&Token{}).Where("id = ?", tokens[i].Id).
+			Update("name_fingerprint", fingerprint).Error; err != nil {
+			tx.Rollback()
+			return 0, err
+		}
 	}
 
 	if err := tx.Where("user_id = ? AND id IN (?)", userId, ids).Delete(&Token{}).Error; err != nil {

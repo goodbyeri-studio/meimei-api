@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -31,6 +32,32 @@ func buildMaskedTokenResponses(tokens []*model.Token) []*model.Token {
 		maskedTokens = append(maskedTokens, buildMaskedTokenResponse(token))
 	}
 	return maskedTokens
+}
+
+func normalizeTokenNameInput(c *gin.Context, name string) (string, bool) {
+	name, err := model.NormalizeTokenName(name)
+	if err == nil {
+		return name, true
+	}
+	if errors.Is(err, model.ErrTokenNameEmpty) {
+		common.ApiErrorI18n(c, i18n.MsgNameCannotBeEmpty)
+		return "", false
+	}
+	if errors.Is(err, model.ErrTokenNameTooLong) {
+		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
+		return "", false
+	}
+	common.ApiError(c, err)
+	return "", false
+}
+
+func respondTokenNameConflict(c *gin.Context, userId int, name string, excludeTokenId int) bool {
+	nameTaken, err := model.IsTokenNameTaken(userId, name, excludeTokenId)
+	if err != nil || !nameTaken {
+		return false
+	}
+	common.ApiErrorI18n(c, i18n.MsgTokenNameAlreadyExists)
+	return true
 }
 
 func validateTokenGroupSelection(c *gin.Context, tokenGroup string) bool {
@@ -197,8 +224,19 @@ func AddToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if len(token.Name) > 50 {
-		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
+	normalizedName, ok := normalizeTokenNameInput(c, token.Name)
+	if !ok {
+		return
+	}
+	token.Name = normalizedName
+	userId := c.GetInt("id")
+	nameTaken, err := model.IsTokenNameTaken(userId, token.Name, 0)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if nameTaken {
+		common.ApiErrorI18n(c, i18n.MsgTokenNameAlreadyExists)
 		return
 	}
 	if !validateTokenGroupSelection(c, token.Group) {
@@ -218,7 +256,7 @@ func AddToken(c *gin.Context) {
 	}
 	// 检查用户令牌数量是否已达上限
 	maxTokens := operation_setting.GetMaxUserTokens()
-	count, err := model.CountUserTokens(c.GetInt("id"))
+	count, err := model.CountUserTokens(userId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -237,7 +275,7 @@ func AddToken(c *gin.Context) {
 		return
 	}
 	cleanToken := model.Token{
-		UserId:             c.GetInt("id"),
+		UserId:             userId,
 		Name:               token.Name,
 		Key:                key,
 		CreatedTime:        common.GetTimestamp(),
@@ -253,6 +291,9 @@ func AddToken(c *gin.Context) {
 	}
 	err = cleanToken.Insert()
 	if err != nil {
+		if respondTokenNameConflict(c, userId, token.Name, 0) {
+			return
+		}
 		common.ApiError(c, err)
 		return
 	}
@@ -285,9 +326,21 @@ func UpdateToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if len(token.Name) > 50 {
-		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
-		return
+	if statusOnly == "" {
+		var ok bool
+		token.Name, ok = normalizeTokenNameInput(c, token.Name)
+		if !ok {
+			return
+		}
+		nameTaken, err := model.IsTokenNameTaken(userId, token.Name, token.Id)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if nameTaken {
+			common.ApiErrorI18n(c, i18n.MsgTokenNameAlreadyExists)
+			return
+		}
 	}
 	if statusOnly == "" && !validateTokenGroupSelection(c, token.Group) {
 		return
@@ -334,6 +387,9 @@ func UpdateToken(c *gin.Context) {
 	}
 	err = cleanToken.Update()
 	if err != nil {
+		if statusOnly == "" && respondTokenNameConflict(c, userId, token.Name, token.Id) {
+			return
+		}
 		common.ApiError(c, err)
 		return
 	}

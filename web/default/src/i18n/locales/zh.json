@@ -2802,6 +2802,7 @@
     "Name for this redemption code (1-20 characters)": "此兑换码的名称（1-20 个字符）",
     "Name is available": "名称可用",
     "Name is not available": "名称不可用",
+    "Name must be 50 characters or fewer": "名称不能超过 50 个字符",
     "Name must be between {{min}} and {{max}} characters": "名称必须介于 {{min}} 到 {{max}} 个字符之间",
     "Name Rule": "名称规则",
     "Name Suffix": "名称后缀",

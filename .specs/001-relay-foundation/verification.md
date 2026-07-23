@@ -25,6 +25,7 @@
 | 2026-07-23 | 支付事务 MySQL 8.0 | `PAYMENT_TEST_DB=mysql PAYMENT_TEST_DSN=... go test ./model -run 'TestCompleteWechatPayTopUp|TestCreditUserTopUpQuota' -count=1` | 通过 | 临时 MySQL 8 容器，端口 33306；测试后销毁 |
 | 2026-07-23 | 支付事务 SQLite | `go test ./model -run 'TestCompleteWechatPayTopUp|TestCreditUserTopUp' -count=1` | 通过 | 默认内存 SQLite |
 | 2026-07-23 | 支付三数据库事务 | `PAYMENT_TEST_DIALECT=... PAYMENT_TEST_DSN=... go test ./model -run TestPaymentTransactionDatabaseMatrix -count=1` | 自动化矩阵 | GitHub Actions 覆盖 SQLite、MySQL 8.0、PostgreSQL 15；保护并发通知、额度上限、邀请奖励和状态一致性 |
+| 2026-07-23 | API 密钥名称唯一性 | `go test ./model ./controller ./relay/helper -count=1`；GitHub 数据库矩阵 | 通过 | 覆盖 SQLite、MySQL 5.7.44、PostgreSQL 9.6；数据库唯一索引阻止并发重名，软删除后允许复用名称 |
 | 2026-07-23 | default 用量日志界面 | `tsgo -b`; `npx tsx --tsconfig tsconfig.app.json --test ...`; `rsbuild build` | 通过 | 覆盖普通用户/管理员列、实际 quota、订阅扣费标记与移动端字段恢复；4 个回归场景通过 |
 | 2026-07-23 | 本地完整镜像 Compose | Windows Docker Compose 与 Linux `docker:27-cli` 执行基础/微信支付 override 的 `config --quiet` | 通过 | 基础组合无需支付 Secret；支付组合显式要求 `WECHAT_PAY_ENV_FILE` 和 `WECHAT_PAY_SECRET_DIR` |
 | 2026-07-23 | 本地完整镜像构建 | `docker compose -f docker-compose.yml -f docker-compose.local.yml build new-api` | 通过 | default/classic 前端产物与 Go 后端均构建完成，生成 `meimei-api:local` |
@@ -39,9 +40,16 @@
 - SQLite、PostgreSQL 15、MySQL 8.0 均完成自动迁移和健康检查；PostgreSQL/MySQL 重启正常。
 - 本地 dev 环境已使用 PostgreSQL、Redis、宿主机 Go 后端和 default 前端 dev server 跑通。
 
+## API 密钥名称唯一约束
+
+- 同一用户的有效 API 密钥名称按去除首尾空格后的 Unicode 字符串唯一；名称限制为最多 50 个字符，不同用户可以使用相同名称。
+- 数据库使用 `name_fingerprint` 保存带命名空间的 SHA-256 指纹，并通过 `(user_id, name_fingerprint)` 唯一索引防止并发创建或改名绕过 controller 检查。
+- 软删除记录改用按 Token ID 生成的墓碑指纹，因此原名称可以复用。
+- 启动迁移按用户分批整理空名称、首尾空格、重复名称和超长名称；生产滚动发布必须先完成迁移并确认旧实例不再写入 Token 表。
+
 ## 未验证风险
 
-- 尚未测试最低支持版本 PostgreSQL 9.6 与 MySQL 5.7.8，也未执行 migration rollback/backup restore。
+- 尚未执行名称唯一性 migration rollback/backup restore。
 - 生产基础设施已按单 App 方案收敛，DNS、Caddy/TLS 和 Docker 基础运行时已完成；尚未完成 production Secret、固定 SHA 镜像、模型渠道、应用部署、独立健康检查、SSE 压缩回归、restore/PITR 演练和真实流量压测。
 - Cloud 企业客户、scoped token、usage 对账和 BlackRain 双引擎 E2E 尚未实现。
 - AGPL、模型厂商转售条款、支付、税务、备案、内容安全和日志留存尚未正式审查。

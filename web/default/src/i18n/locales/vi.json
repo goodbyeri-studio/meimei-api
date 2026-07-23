@@ -2802,6 +2802,7 @@
     "Name for this redemption code (1-20 characters)": "Tên cho mã đổi quà này (1-20 ký tự)",
     "Name is available": "Tên có sẵn",
     "Name is not available": "Tên không có sẵn",
+    "Name must be 50 characters or fewer": "Tên không được vượt quá 50 ký tự",
     "Name must be between {{min}} and {{max}} characters": "Tên phải có giữa {{min}} và {{max}} ký tự",
     "Name Rule": "Quy tắc đặt tên",
     "Name Suffix": "Hậu tố tên",

@@ -1,0 +1,87 @@
+name: Token Name Database Matrix
+
+on:
+  pull_request:
+    paths:
+      - "controller/token.go"
+      - "controller/token_test.go"
+      - "model/main.go"
+      - "model/token.go"
+      - "model/token_name*_test.go"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/token-name-database-matrix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.1"
+          cache: true
+      - name: Test token name uniqueness on SQLite
+        env:
+          TOKEN_NAME_TEST_DIALECT: sqlite
+          TOKEN_NAME_TEST_DSN: file:token-name-matrix?mode=memory&cache=shared
+        run: go test ./model -run TestTokenNameUniquenessDatabaseMatrix -count=1
+
+  mysql:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:5.7.44
+        env:
+          MYSQL_DATABASE: blackrain_token_name_test
+          MYSQL_ROOT_PASSWORD: test-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptest-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.1"
+          cache: true
+      - name: Test token name uniqueness on MySQL 5.7
+        env:
+          TOKEN_NAME_TEST_DIALECT: mysql
+          TOKEN_NAME_TEST_DSN: root:test-password@tcp(127.0.0.1:3306)/blackrain_token_name_test?charset=utf8mb4&parseTime=True&loc=Local
+        run: go test ./model -run TestTokenNameUniquenessDatabaseMatrix -count=1
+
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:9.6-alpine
+        env:
+          POSTGRES_DB: blackrain_token_name_test
+          POSTGRES_PASSWORD: test-password
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d blackrain_token_name_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.1"
+          cache: true
+      - name: Test token name uniqueness on PostgreSQL 9.6
+        env:
+          TOKEN_NAME_TEST_DIALECT: postgres
+          TOKEN_NAME_TEST_DSN: postgres://postgres:test-password@127.0.0.1:5432/blackrain_token_name_test?sslmode=disable
+        run: go test ./model -run TestTokenNameUniquenessDatabaseMatrix -count=1

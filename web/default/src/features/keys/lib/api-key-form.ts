@@ -22,7 +22,7 @@ import { z } from 'zod'
 import { parseQuotaFromDollars, quotaUnitsToDollars } from '@/lib/format'
 
 import { DEFAULT_GROUP } from '../constants'
-import { type ApiKeyFormData, type ApiKey } from '../types'
+import type { ApiKey, ApiKeyFormData } from '../types'
 
 // ============================================================================
 // Form Schema
@@ -31,7 +31,14 @@ import { type ApiKeyFormData, type ApiKey } from '../types'
 export function getApiKeyFormSchema(t: TFunction) {
   return z
     .object({
-      name: z.string().min(1, t('Please enter a name')),
+      name: z
+        .string()
+        .trim()
+        .min(1, t('Please enter a name'))
+        .refine(
+          (name) => [...name].length <= 50,
+          t('Name must be 50 characters or fewer')
+        ),
       remain_quota_dollars: z.number().optional(),
       expired_time: z.date().optional(),
       unlimited_quota: z.boolean(),

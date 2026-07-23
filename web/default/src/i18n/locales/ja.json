@@ -2802,6 +2802,7 @@
     "Name for this redemption code (1-20 characters)": "この引き換えコードの名前（1～20文字）",
     "Name is available": "名前が利用可能です",
     "Name is not available": "名前が利用できません",
+    "Name must be 50 characters or fewer": "名前は50文字以内で入力してください",
     "Name must be between {{min}} and {{max}} characters": "名前は{{min}}文字以上{{max}}文字以下である必要があります",
     "Name Rule": "名前ルール",
     "Name Suffix": "名前サフィックス",
