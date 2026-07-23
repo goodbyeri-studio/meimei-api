@@ -209,3 +209,28 @@ func TestEnableChannelByTagRejectsInvalidDeepKeyGroup(t *testing.T) {
 	require.NoError(t, DB.First(&conflicting, conflicting.Id).Error)
 	assert.Equal(t, common.ChannelStatusManuallyDisabled, conflicting.Status)
 }
+
+func TestEditChannelByTagRejectsInvalidDeepKeyGroup(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&Channel{}))
+	deepKeyURL := "https://deepkey.top"
+	tag := "deepkey-edit-tag-conflict"
+	names := []string{"deepkey-edit-tag-existing", "deepkey-edit-tag-conflict"}
+	t.Cleanup(func() { DB.Where("name in ?", names).Delete(&Channel{}) })
+	existing := Channel{
+		Name: names[0], Key: "key-one", Status: common.ChannelStatusEnabled,
+		BaseURL: &deepKeyURL, Group: "edit-tag-existing",
+	}
+	conflicting := Channel{
+		Name: names[1], Key: "key-two", Status: common.ChannelStatusEnabled,
+		BaseURL: &deepKeyURL, Group: "edit-tag-original", Tag: &tag,
+	}
+	require.NoError(t, DB.Create(&existing).Error)
+	require.NoError(t, DB.Create(&conflicting).Error)
+
+	newGroup := "edit-tag-existing"
+	err := EditChannelByTag(tag, nil, nil, nil, &newGroup, nil, nil, nil, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "multiple upstream key configurations")
+	require.NoError(t, DB.First(&conflicting, conflicting.Id).Error)
+	assert.Equal(t, "edit-tag-original", conflicting.Group)
+}
