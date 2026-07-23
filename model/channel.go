@@ -453,15 +453,17 @@ func BatchInsertChannels(channels []Channel) error {
 }
 
 func GetEnabledChannelGroups() (map[string]struct{}, error) {
-	var channelGroups []string
+	var channelGroups []struct {
+		Group string `gorm:"column:group"`
+	}
 	if err := DB.Model(&Channel{}).
 		Where("status = ?", common.ChannelStatusEnabled).
-		Pluck(commonGroupCol, &channelGroups).Error; err != nil {
+		Select(commonGroupCol).Find(&channelGroups).Error; err != nil {
 		return nil, err
 	}
 	groups := make(map[string]struct{})
 	for _, channelGroup := range channelGroups {
-		for _, group := range strings.Split(channelGroup, ",") {
+		for _, group := range strings.Split(channelGroup.Group, ",") {
 			group = strings.TrimSpace(group)
 			if group != "" {
 				groups[group] = struct{}{}

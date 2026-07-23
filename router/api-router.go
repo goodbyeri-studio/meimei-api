@@ -232,6 +232,7 @@ func SetApiRouter(router *gin.Engine) {
 			ratioSyncRoute.GET("/channels", controller.GetSyncableChannels)
 			ratioSyncRoute.POST("/fetch", controller.FetchUpstreamRatios)
 			ratioSyncRoute.POST("/deepkey/groups", controller.SyncDeepKeyGroups)
+			ratioSyncRoute.POST("/deepkey/migrate", controller.MigrateDeepKeyPricing)
 		}
 		registerChannelRoutes(apiRouter)
 		registerAuthzRoutes(apiRouter)
