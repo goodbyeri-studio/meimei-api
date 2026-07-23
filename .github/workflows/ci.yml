@@ -82,6 +82,9 @@ jobs:
       - name: Build embedded default frontend
         working-directory: web/default
         run: bun run build:check
+      - name: Resolve classic frontend dependencies
+        working-directory: web
+        run: bun install --filter ./classic --frozen-lockfile
       - name: Build embedded classic frontend
         working-directory: web/classic
         run: bun run build
