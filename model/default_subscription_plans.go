@@ -62,7 +62,7 @@ func seedDefaultCNYSubscriptionPlans() error {
 
 		// Upgrade only untouched built-in monthly plans. Matching the complete
 		// business fingerprint avoids changing administrator-managed plans.
-		for _, item := range defaultCNYSubscriptionPlans {
+		for index, item := range defaultCNYSubscriptionPlans {
 			quota, clamp := common.QuotaFromDecimalChecked(
 				decimal.NewFromInt(item.amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
 			)
@@ -70,8 +70,10 @@ func seedDefaultCNYSubscriptionPlans() error {
 				return errors.New("默认套餐额度超出允许范围")
 			}
 			legacyPlanQuery := tx.Model(&SubscriptionPlan{}).
-				Where("title = ? AND subtitle = ? AND currency = ? AND price_amount = ? AND duration_unit = ? AND duration_value = ? AND custom_seconds = ? AND total_amount = ? AND quota_reset_period = ?",
-					item.title, item.subtitle, "CNY", float64(item.amount), SubscriptionDurationMonth, 1, 0, int64(quota), SubscriptionResetNever)
+				Where("title = ? AND subtitle = ? AND currency = ? AND price_amount = ? AND duration_unit = ? AND duration_value = ? AND custom_seconds = ? AND enabled = ? AND sort_order = ? AND allow_balance_pay = ? AND allow_wallet_overflow = ? AND stripe_price_id = ? AND creem_product_id = ? AND waffo_pancake_product_id = ? AND max_purchase_per_user = ? AND upgrade_group = ? AND downgrade_group = ? AND total_amount = ? AND quota_reset_period = ? AND quota_reset_custom_seconds = ?",
+					item.title, item.subtitle, "CNY", float64(item.amount), SubscriptionDurationMonth, 1, 0,
+					true, len(defaultCNYSubscriptionPlans)-index, true, true, "", "", "", 0, "", "",
+					int64(quota), SubscriptionResetNever, 0)
 			var legacyPlanIds []int
 			if err := legacyPlanQuery.Pluck("id", &legacyPlanIds).Error; err != nil {
 				return err

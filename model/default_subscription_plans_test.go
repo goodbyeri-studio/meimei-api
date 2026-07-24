@@ -35,24 +35,37 @@ func TestSeedDefaultSubscriptionPlansMigratesOnlyUntouchedBuiltIns(t *testing.T)
 	)
 	require.Nil(t, clamp)
 	legacyDefault := &SubscriptionPlan{
-		Title:            "轻量包",
-		Subtitle:         "适合少量体验与临时调用",
-		PriceAmount:      10,
-		Currency:         "CNY",
-		DurationUnit:     SubscriptionDurationMonth,
-		DurationValue:    1,
-		TotalAmount:      int64(quota),
-		QuotaResetPeriod: SubscriptionResetNever,
+		Title:               "轻量包",
+		Subtitle:            "适合少量体验与临时调用",
+		PriceAmount:         10,
+		Currency:            "CNY",
+		DurationUnit:        SubscriptionDurationMonth,
+		DurationValue:       1,
+		Enabled:             true,
+		SortOrder:           len(defaultCNYSubscriptionPlans),
+		AllowBalancePay:     common.GetPointer(true),
+		AllowWalletOverflow: common.GetPointer(true),
+		TotalAmount:         int64(quota),
+		QuotaResetPeriod:    SubscriptionResetNever,
 	}
+	modifiedQuota, modifiedClamp := common.QuotaFromDecimalChecked(
+		decimal.NewFromInt(20).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
+	)
+	require.Nil(t, modifiedClamp)
 	modifiedPlan := &SubscriptionPlan{
-		Title:            "入门包",
-		Subtitle:         "管理员修改过的说明",
-		PriceAmount:      20,
-		Currency:         "CNY",
-		DurationUnit:     SubscriptionDurationMonth,
-		DurationValue:    1,
-		TotalAmount:      int64(quota) * 2,
-		QuotaResetPeriod: SubscriptionResetNever,
+		Title:               "入门包",
+		Subtitle:            "适合个人开发者日常使用",
+		PriceAmount:         20,
+		Currency:            "CNY",
+		DurationUnit:        SubscriptionDurationMonth,
+		DurationValue:       1,
+		Enabled:             true,
+		SortOrder:           len(defaultCNYSubscriptionPlans) - 1,
+		AllowBalancePay:     common.GetPointer(true),
+		AllowWalletOverflow: common.GetPointer(true),
+		MaxPurchasePerUser:  1,
+		TotalAmount:         int64(modifiedQuota),
+		QuotaResetPeriod:    SubscriptionResetNever,
 	}
 	require.NoError(t, DB.Create(legacyDefault).Error)
 	require.NoError(t, DB.Create(modifiedPlan).Error)
