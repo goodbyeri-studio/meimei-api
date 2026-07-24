@@ -37,15 +37,27 @@ type CCSwitchURLParams = {
 }
 
 export function buildCCSwitchURL(params: CCSwitchURLParams): string {
+  const serverURL = new URL(params.serverAddress.trim())
+  if (serverURL.protocol !== 'http:' && serverURL.protocol !== 'https:') {
+    throw new TypeError('CC Switch server address must use HTTP or HTTPS')
+  }
+
+  serverURL.search = ''
+  serverURL.hash = ''
+  serverURL.pathname = serverURL.pathname.replace(/\/+$/, '')
+
+  const serverAddress = serverURL.toString().replace(/\/$/, '')
   const endpoint =
-    params.app === 'codex' ? `${params.serverAddress}/v1` : params.serverAddress
+    params.app === 'codex' && !serverURL.pathname.endsWith('/v1')
+      ? `${serverAddress}/v1`
+      : serverAddress
   const searchParams = new URLSearchParams()
   searchParams.set('resource', 'provider')
   searchParams.set('app', params.app)
   searchParams.set('name', params.name)
   searchParams.set('endpoint', endpoint)
   searchParams.set('apiKey', params.apiKey)
-  searchParams.set('homepage', params.serverAddress)
+  searchParams.set('homepage', serverAddress)
   searchParams.set('enabled', 'true')
   return `ccswitch://v1/import?${searchParams.toString()}`
 }

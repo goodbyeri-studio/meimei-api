@@ -39,6 +39,9 @@ describe('CC Switch provider URL', () => {
     assert.equal(url.searchParams.get('name'), 'meimei-codex')
     assert.equal(url.searchParams.get('endpoint'), `${serverAddress}/v1`)
     assert.equal(url.searchParams.get('apiKey'), 'sk-codex-key')
+    assert.equal(url.searchParams.get('homepage'), serverAddress)
+    assert.equal(url.searchParams.get('resource'), 'provider')
+    assert.equal(url.searchParams.get('enabled'), 'true')
     assert.equal(url.searchParams.has('model'), false)
   })
 
@@ -57,5 +60,73 @@ describe('CC Switch provider URL', () => {
     assert.equal(url.searchParams.get('endpoint'), serverAddress)
     assert.equal(url.searchParams.get('apiKey'), 'sk-claude-key')
     assert.equal(url.searchParams.has('model'), false)
+  })
+
+  test('normalizes trailing slashes before adding the Codex API path', () => {
+    const url = new URL(
+      buildCCSwitchURL({
+        app: 'codex',
+        name: 'meimei-codex',
+        apiKey: 'sk-test',
+        serverAddress: `${serverAddress}/`,
+      })
+    )
+
+    assert.equal(url.searchParams.get('endpoint'), `${serverAddress}/v1`)
+    assert.equal(url.searchParams.get('homepage'), serverAddress)
+  })
+
+  test('does not duplicate an existing Codex API path', () => {
+    const url = new URL(
+      buildCCSwitchURL({
+        app: 'codex',
+        name: 'meimei-codex',
+        apiKey: 'sk-test',
+        serverAddress: `${serverAddress}/v1/`,
+      })
+    )
+
+    assert.equal(url.searchParams.get('endpoint'), `${serverAddress}/v1`)
+  })
+
+  test('removes query and fragment data from the server address', () => {
+    const url = new URL(
+      buildCCSwitchURL({
+        app: 'codex',
+        name: 'meimei-codex',
+        apiKey: 'sk-test',
+        serverAddress: `${serverAddress}/relay/?source=console#settings`,
+      })
+    )
+
+    assert.equal(url.searchParams.get('endpoint'), `${serverAddress}/relay/v1`)
+    assert.equal(url.searchParams.get('homepage'), `${serverAddress}/relay`)
+  })
+
+  test('encodes provider names and API keys without changing their values', () => {
+    const url = new URL(
+      buildCCSwitchURL({
+        app: 'claude',
+        name: '美美 & Claude',
+        apiKey: 'sk-a+b&c%20',
+        serverAddress,
+      })
+    )
+
+    assert.equal(url.searchParams.get('name'), '美美 & Claude')
+    assert.equal(url.searchParams.get('apiKey'), 'sk-a+b&c%20')
+  })
+
+  test('rejects non-HTTP server addresses', () => {
+    assert.throws(
+      () =>
+        buildCCSwitchURL({
+          app: 'codex',
+          name: 'meimei-codex',
+          apiKey: 'sk-test',
+          serverAddress: 'javascript:alert(1)',
+        }),
+      /HTTP or HTTPS/
+    )
   })
 })
