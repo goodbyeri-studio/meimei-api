@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -26,51 +27,71 @@ type MultiKeyTableRowActionsProps = {
   keyIndex: number
   status: number
   canDelete: boolean
+  isMultiKey: boolean
   onAction: (action: MultiKeyConfirmAction) => void
+  onRotate: (keyIndex: number) => void
 }
 
 export function MultiKeyTableRowActions({
   keyIndex,
   status,
   canDelete,
+  isMultiKey,
   onAction,
+  onRotate,
 }: MultiKeyTableRowActionsProps) {
   const { t } = useTranslation()
   const isEnabled = status === 1
+  let statusAction: ReactNode = null
+  if (isMultiKey && isEnabled) {
+    statusAction = (
+      <Button
+        variant='outline'
+        size='sm'
+        onClick={() => onAction({ type: 'disable', keyIndex })}
+      >
+        {t('Disable')}
+      </Button>
+    )
+  } else if (isMultiKey) {
+    statusAction = (
+      <Button
+        variant='outline'
+        size='sm'
+        onClick={() => onAction({ type: 'enable', keyIndex })}
+      >
+        {t('Enable')}
+      </Button>
+    )
+  }
 
   return (
     <div className='flex justify-end gap-2'>
-      {isEnabled ? (
-        <Button
-          variant='outline'
-          size='sm'
-          onClick={() => onAction({ type: 'disable', keyIndex })}
-        >
-          {t('Disable')}
-        </Button>
-      ) : (
-        <Button
-          variant='outline'
-          size='sm'
-          onClick={() => onAction({ type: 'enable', keyIndex })}
-        >
-          {t('Enable')}
-        </Button>
-      )}
       <Button
-        variant='destructive'
+        variant='outline'
         size='sm'
-        onClick={() => {
-          if (!canDelete) return
-          onAction({ type: 'delete', keyIndex })
-        }}
         disabled={!canDelete}
-        title={
-          canDelete ? undefined : t('No permission to perform this action')
-        }
+        onClick={() => onRotate(keyIndex)}
       >
-        {t('Delete')}
+        {t('Rotate')}
       </Button>
+      {statusAction}
+      {isMultiKey ? (
+        <Button
+          variant='destructive'
+          size='sm'
+          onClick={() => {
+            if (!canDelete) return
+            onAction({ type: 'delete', keyIndex })
+          }}
+          disabled={!canDelete}
+          title={
+            canDelete ? undefined : t('No permission to perform this action')
+          }
+        >
+          {t('Delete')}
+        </Button>
+      ) : null}
     </div>
   )
 }

@@ -20,6 +20,17 @@ const (
 	WechatPayOrderStatusCredited = "credited"
 	WechatPayOrderStatusFailed   = "failed"
 	WechatPayOrderStatusClosed   = "closed"
+	WechatPayOrderStatusRefunded = "refunded"
+
+	WechatPayRefundStatusSubmitting = "submitting"
+	WechatPayRefundStatusProcessing = "processing"
+	WechatPayRefundStatusSuccess    = "success"
+	WechatPayRefundStatusClosed     = "closed"
+	WechatPayRefundStatusAbnormal   = "abnormal"
+	WechatPayRefundStatusFailed     = "failed"
+
+	WechatPayOrderKindTopUp        = "topup"
+	WechatPayOrderKindSubscription = "subscription"
 )
 
 type WechatPayOrder struct {
@@ -72,6 +83,43 @@ type WechatPayNotification struct {
 	ProcessedAt      int64  `json:"processed_at"`
 }
 
+type WechatPayRefund struct {
+	Id                       int     `json:"id"`
+	OrderKind                string  `json:"order_kind" gorm:"type:varchar(24);index"`
+	OutTradeNo               string  `json:"out_trade_no" gorm:"type:varchar(64);uniqueIndex"`
+	OutRefundNo              string  `json:"out_refund_no" gorm:"type:varchar(64);uniqueIndex"`
+	WechatRefundId           *string `json:"wechat_refund_id,omitempty" gorm:"type:varchar(64);uniqueIndex"`
+	UserId                   int     `json:"user_id" gorm:"index"`
+	RequestedBy              int     `json:"requested_by" gorm:"index"`
+	AmountFen                int64   `json:"amount_fen"`
+	TotalFen                 int64   `json:"total_fen"`
+	Currency                 string  `json:"currency" gorm:"type:varchar(8)"`
+	Reason                   string  `json:"reason" gorm:"type:varchar(80)"`
+	Status                   string  `json:"status" gorm:"type:varchar(24);index"`
+	FailureReason            string  `json:"failure_reason,omitempty" gorm:"type:varchar(255)"`
+	BusinessReservationState string  `json:"business_reservation_state" gorm:"type:varchar(24)"`
+	ReservedQuota            int     `json:"reserved_quota"`
+	AffiliateInviterId       int     `json:"affiliate_inviter_id"`
+	ReservedAffiliateQuota   int     `json:"reserved_affiliate_quota"`
+	UserSubscriptionId       int     `json:"user_subscription_id" gorm:"index"`
+	PreviousSubscriptionEnd  int64   `json:"previous_subscription_end"`
+	PreviousUserGroup        string  `json:"previous_user_group" gorm:"type:varchar(64)"`
+	SuccessTime              int64   `json:"success_time"`
+	CreatedAt                int64   `json:"created_at"`
+	UpdatedAt                int64   `json:"updated_at"`
+	LastCheckedAt            int64   `json:"last_checked_at"`
+}
+
+type WechatPayRefundNotification struct {
+	Id               int    `json:"id"`
+	EventId          string `json:"event_id" gorm:"type:varchar(64);uniqueIndex"`
+	OutRefundNo      string `json:"out_refund_no" gorm:"type:varchar(64);index"`
+	BodyDigest       string `json:"body_digest" gorm:"type:varchar(64)"`
+	ProcessingStatus string `json:"processing_status" gorm:"type:varchar(24)"`
+	ReceivedAt       int64  `json:"received_at"`
+	ProcessedAt      int64  `json:"processed_at"`
+}
+
 type WechatPayCompletion struct {
 	EventID       string
 	OutTradeNo    string
@@ -103,6 +151,14 @@ func GetWechatPayOrderByClientRequest(userID int, clientRequestID string) (*Wech
 func GetWechatPayOrderForUser(userID int, tradeNo string) (*WechatPayOrder, error) {
 	var order WechatPayOrder
 	if err := DB.Where("user_id = ? AND out_trade_no = ?", userID, tradeNo).First(&order).Error; err != nil {
+		return nil, err
+	}
+	return &order, nil
+}
+
+func GetWechatPayOrderByTradeNo(tradeNo string) (*WechatPayOrder, error) {
+	var order WechatPayOrder
+	if err := DB.Where("out_trade_no = ?", tradeNo).First(&order).Error; err != nil {
 		return nil, err
 	}
 	return &order, nil

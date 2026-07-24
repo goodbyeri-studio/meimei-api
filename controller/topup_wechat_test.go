@@ -211,7 +211,7 @@ func TestReconcileWechatPayOrderStateTransitions(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			db := setupModelListControllerTestDB(t)
-			require.NoError(t, db.AutoMigrate(&model.User{}, &model.TopUp{}, &model.WechatPayOrder{}, &model.WechatPayNotification{}))
+			require.NoError(t, db.AutoMigrate(&model.User{}, &model.TopUp{}, &model.WechatPayOrder{}, &model.SubscriptionWechatPayOrder{}, &model.WechatPayNotification{}))
 			tradeNo := "wechat-controller-" + testCase.name
 			topUp := &model.TopUp{UserId: 901, Amount: 2, Money: 1, TradeNo: tradeNo, PaymentMethod: model.PaymentMethodWechatNative, PaymentProvider: model.PaymentProviderWechatNative, CreateTime: time.Now().Unix(), Status: common.TopUpStatusPending}
 			order := &model.WechatPayOrder{UserId: 901, ClientRequestId: "wechat_controller_request", OutTradeNo: tradeNo, AmountFen: 100, CreditQuota: 2, Currency: "CNY", Status: model.WechatPayOrderStatusPending, ExpiresAt: testCase.expiresAt, CreatedAt: time.Now().Unix(), UpdatedAt: time.Now().Unix()}

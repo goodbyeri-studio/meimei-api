@@ -211,6 +211,10 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
         const status = row.getValue('status') as number
         const config =
           MODEL_STATUS_CONFIG[status as 0 | 1] || MODEL_STATUS_CONFIG[0]
+        let label = config.label
+        if (row.original.catalog_only) {
+          label = status === 1 ? t('Published') : t('Unpublished')
+        }
 
         return (
           <StatusBadge
@@ -219,7 +223,7 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
             copyable={false}
             className='-ml-1.5 max-w-none shrink-0'
           >
-            {config.label}
+            {label}
           </StatusBadge>
         )
       },
@@ -232,6 +236,50 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
       },
       size: 110,
       minSize: 110,
+      enableSorting: false,
+    },
+
+    {
+      accessorKey: 'catalog_source',
+      header: t('Source'),
+      meta: { mobileHidden: true },
+      cell: ({ row }) => {
+        const source = row.original.catalog_source || t('Local')
+        return (
+          <StatusBadge
+            label={source}
+            variant={row.original.catalog_only ? 'info' : 'neutral'}
+            size='sm'
+            copyable={false}
+            className='-ml-1.5 max-w-none shrink-0'
+          />
+        )
+      },
+      size: 100,
+      enableSorting: false,
+    },
+
+    {
+      accessorKey: 'upstream_available',
+      header: t('Upstream Status'),
+      meta: { mobileHidden: true },
+      cell: ({ row }) => {
+        if (!row.original.catalog_only) {
+          return <span className='text-muted-foreground text-xs'>-</span>
+        }
+        const available = row.original.upstream_available
+        return (
+          <StatusBadge
+            variant={available ? 'success' : 'danger'}
+            size='sm'
+            copyable={false}
+            className='-ml-1.5 max-w-none shrink-0'
+          >
+            {available ? t('Available') : t('Unavailable')}
+          </StatusBadge>
+        )
+      },
+      size: 130,
       enableSorting: false,
     },
 

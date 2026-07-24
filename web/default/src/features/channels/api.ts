@@ -291,16 +291,14 @@ export async function deleteDisabledChannels(): Promise<{
 }
 
 /**
- * Get channel key (requires 2FA verification)
+ * Get channel key (root admin only)
  */
 export async function getChannelKey(
-  id: number,
-  code?: string
+  id: number
 ): Promise<{ success: boolean; message?: string; data?: { key: string } }> {
-  const payload = code ? { code } : undefined
   const res = await api.post(
     `/api/channel/${id}/key`,
-    payload,
+    undefined,
     channelActionConfig()
   )
   return res.data
@@ -464,6 +462,27 @@ export async function deleteDisabledMultiKeys(
     channel_id: channelId,
     action: 'delete_disabled_keys',
   }) as Promise<{ success: boolean; message?: string; data?: number }>
+}
+
+export async function appendMultiKeys(channelId: number, keys: string[]) {
+  return manageMultiKeys({
+    channel_id: channelId,
+    action: 'append_keys',
+    keys,
+  }) as Promise<{ success: boolean; message?: string }>
+}
+
+export async function replaceMultiKey(
+  channelId: number,
+  keyIndex: number,
+  key: string
+) {
+  return manageMultiKeys({
+    channel_id: channelId,
+    action: 'replace_key',
+    key_index: keyIndex,
+    key,
+  }) as Promise<{ success: boolean; message?: string }>
 }
 
 // ============================================================================

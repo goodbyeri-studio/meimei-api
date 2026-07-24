@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { createHash } from 'node:crypto'
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -125,6 +126,18 @@ for (const slug of uniqueSlugs) {
   }
 }
 
+const docsVersionHash = createHash('sha256')
+docsVersionHash.update(indexSource)
+for (const source of articleSources.values()) docsVersionHash.update(source)
+const docsVersion = docsVersionHash.digest('hex').slice(0, 12)
+
+for (const [articlePath, source] of articleSources) {
+  articleSources.set(
+    articlePath,
+    prepareArticleHtml(source, articleCsp, docsVersion)
+  )
+}
+
 const assetDestinations = new Map(
   [...assetPaths].map((assetPath) => [
     assetPath,
@@ -136,8 +149,11 @@ await rm(outputDir, { recursive: true, force: true })
 await mkdir(path.join(outputDir, 'articles'), { recursive: true })
 await mkdir(path.join(outputDir, 'images'), { recursive: true })
 
-const preparedIndex = prepareIndexHtml(indexSource, indexCsp)
-const docsApp = await readFile(appSourcePath, 'utf8')
+const preparedIndex = prepareIndexHtml(indexSource, indexCsp, docsVersion)
+const docsApp = (await readFile(appSourcePath, 'utf8')).replaceAll(
+  '__DOCS_VERSION__',
+  docsVersion
+)
 
 await writeFile(path.join(outputDir, 'index.html'), preparedIndex, 'utf8')
 await writeFile(path.join(outputDir, 'app.js'), docsApp, 'utf8')
@@ -161,8 +177,8 @@ for (const [assetPath, destination] of assetDestinations) {
 
 const generatedText = [preparedIndex, ...articleSources.values()].join('\n')
 
-if (/deepkey(?:\.top)?/i.test(generatedText)) {
-  throw new Error('Generated customer documentation still contains DeepKey')
+if (/(?:deepkey(?:\.top)?|goodbyeri(?:\.cc)?)/i.test(generatedText)) {
+  throw new Error('Generated customer documentation still contains old brand')
 }
 if (
   /<script\b|\son[a-z]+\s*=|javascript:|data:text\/html/i.test(

@@ -23,6 +23,7 @@ For commercial licensing, please contact support@quantumnous.com
   var body = document.body
   var scrim = document.getElementById('scrim')
   var defaultSlug = 'guide-intro'
+  var docsVersion = 'b35b88632305'
 
   function getHashSlug() {
     try {
@@ -54,7 +55,11 @@ For commercial licensing, please contact support@quantumnous.com
 
   function go(slug, push) {
     var targetSlug = findLink(slug) ? slug : defaultSlug
-    var target = 'articles/' + targetSlug + '.html'
+    var target =
+      'articles/' +
+      targetSlug +
+      '.html' +
+      (docsVersion ? '?v=' + docsVersion : '')
     if (iframe.getAttribute('src') !== target) {
       iframe.setAttribute('src', target)
     }

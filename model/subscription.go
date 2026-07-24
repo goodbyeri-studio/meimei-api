@@ -204,6 +204,9 @@ func (p *SubscriptionPlan) BeforeUpdate(tx *gorm.DB) error {
 }
 
 func (p *SubscriptionPlan) NormalizeDefaults() {
+	if p.Currency == "" {
+		p.Currency = "CNY"
+	}
 	if p.AllowBalancePay == nil {
 		p.AllowBalancePay = common.GetPointer(true)
 	}
@@ -226,7 +229,8 @@ type SubscriptionOrder struct {
 	CreateTime      int64  `json:"create_time"`
 	CompleteTime    int64  `json:"complete_time"`
 
-	ProviderPayload string `json:"provider_payload" gorm:"type:text"`
+	ProviderPayload    string `json:"provider_payload" gorm:"type:text"`
+	UserSubscriptionId *int   `json:"user_subscription_id,omitempty" gorm:"uniqueIndex"`
 }
 
 func (o *SubscriptionOrder) Insert() error {
@@ -646,10 +650,11 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 			// still allow completion for already purchased orders
 		}
 		upgradeGroup = strings.TrimSpace(plan.UpgradeGroup)
-		_, err = CreateUserSubscriptionFromPlanTx(tx, order.UserId, plan, "order")
+		userSubscription, err := CreateUserSubscriptionFromPlanTx(tx, order.UserId, plan, "order")
 		if err != nil {
 			return err
 		}
+		order.UserSubscriptionId = &userSubscription.Id
 		if err := upsertSubscriptionTopUpTx(tx, &order); err != nil {
 			return err
 		}

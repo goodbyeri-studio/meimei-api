@@ -26,6 +26,7 @@ import (
 	"github.com/wechatpay-apiv3/wechatpay-go/core/option"
 	"github.com/wechatpay-apiv3/wechatpay-go/services/payments"
 	"github.com/wechatpay-apiv3/wechatpay-go/services/payments/native"
+	"github.com/wechatpay-apiv3/wechatpay-go/services/refunddomestic"
 	"github.com/wechatpay-apiv3/wechatpay-go/utils"
 	"gorm.io/gorm"
 )
@@ -41,6 +42,7 @@ var wechatPayClientRequestIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{16,64}$
 type wechatPayRuntime struct {
 	config        setting.WechatPayConfig
 	nativeService wechatNativeService
+	refundService wechatRefundService
 	notifyHandler wechatNotifyHandler
 }
 
@@ -52,6 +54,11 @@ type wechatNativeService interface {
 
 type wechatNotifyHandler interface {
 	ParseNotifyRequest(context.Context, *http.Request, interface{}) (*notify.Request, error)
+}
+
+type wechatRefundService interface {
+	Create(context.Context, refunddomestic.CreateRequest) (*refunddomestic.Refund, *core.APIResult, error)
+	QueryByOutRefundNo(context.Context, refunddomestic.QueryByOutRefundNoRequest) (*refunddomestic.Refund, *core.APIResult, error)
 }
 
 var wechatPayRuntimeLoader = getWechatPayRuntime
@@ -122,6 +129,7 @@ func getWechatPayRuntime(ctx context.Context) (*wechatPayRuntime, error) {
 	runtime := &wechatPayRuntime{
 		config:        config,
 		nativeService: &native.NativeApiService{Client: client},
+		refundService: &refunddomestic.RefundsApiService{Client: client},
 		notifyHandler: notifyHandler,
 	}
 	wechatPayRuntimeCache.runtime = runtime

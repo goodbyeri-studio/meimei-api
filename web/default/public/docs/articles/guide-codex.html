@@ -4,13 +4,13 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' https: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Codex 安装 - goodbyeri.cc 文档</title>
-  <link rel="stylesheet" href="../article.css">
+  <title>Codex 安装 - meimeiapi.com 文档</title>
+  <link rel="stylesheet" href="../article.css?v=b35b88632305">
 </head>
 <body class="article-body">
   <article class="doc">
-    <h1 class="doc-title">Codex 接入 goodbyeri.cc</h1>
-    <p>本页是 goodbyeri.cc 官方维护的 OpenAI Codex 安装与配置指南。Codex 的接入地址统一使用 <code>https://goodbyeri.cc/v1</code>,密钥请在 <a href="https://goodbyeri.cc" target="_blank" rel="noopener">goodbyeri.cc</a> 控制台创建。</p>
+    <h1 class="doc-title">Codex 接入 meimeiapi.com</h1>
+    <p>本页是 meimeiapi.com 官方维护的 OpenAI Codex 安装与配置指南。Codex 的接入地址统一使用 <code>https://meimeiapi.com/v1</code>,密钥请在 <a href="https://meimeiapi.com" target="_blank" rel="noopener">meimeiapi.com</a> 控制台创建。</p>
 
     <h2>Windows</h2>
     <h3>1. 安装 Node.js</h3>
@@ -28,7 +28,7 @@ disable_response_storage = true
 name = "custom"
 wire_api = "responses"
 requires_openai_auth = true
-base_url = "https://goodbyeri.cc/v1"</code></pre>
+base_url = "https://meimeiapi.com/v1"</code></pre>
     <p>创建 <code>auth.json</code>:</p>
     <pre><code>{
   "OPENAI_API_KEY": "你的API密钥"
@@ -40,7 +40,7 @@ base_url = "https://goodbyeri.cc/v1"</code></pre>
     <h3>1. 安装</h3>
     <pre><code>npm install -g @openai/codex</code></pre>
     <h3>2. 配置环境变量</h3>
-    <pre><code>echo 'export OPENAI_BASE_URL="https://goodbyeri.cc/v1"' >> ~/.bashrc
+    <pre><code>echo 'export OPENAI_BASE_URL="https://meimeiapi.com/v1"' >> ~/.bashrc
 echo 'export OPENAI_API_KEY="你的API密钥"' >> ~/.bashrc
 source ~/.bashrc</code></pre>
     <h3>3. 使用</h3>
@@ -50,7 +50,7 @@ source ~/.bashrc</code></pre>
     <h3>1. 安装</h3>
     <pre><code>npm install -g @openai/codex</code></pre>
     <h3>2. 配置环境变量</h3>
-    <pre><code>echo 'export OPENAI_BASE_URL="https://goodbyeri.cc/v1"' >> ~/.zshrc
+    <pre><code>echo 'export OPENAI_BASE_URL="https://meimeiapi.com/v1"' >> ~/.zshrc
 echo 'export OPENAI_API_KEY="你的API密钥"' >> ~/.zshrc
 source ~/.zshrc</code></pre>
     <h3>3. 使用</h3>
@@ -74,7 +74,7 @@ disable_response_storage = true
 name = "custom"
 wire_api = "responses"
 requires_openai_auth = true
-base_url = "https://goodbyeri.cc/v1"</code></pre>
+base_url = "https://meimeiapi.com/v1"</code></pre>
 
     <h2>桌面版</h2>
     <h3>1. 安装</h3>
@@ -86,7 +86,7 @@ base_url = "https://goodbyeri.cc/v1"</code></pre>
     <p>安装后打开 Codex,添加项目即可使用。Windows 需要 WSL 时可在设置中切换 Agent 到 WSL,并重启应用。</p>
 
     <footer class="doc-footer">
-      <p>© 2025 goodbyeri.cc · 官方接入指南 · 更多 Codex 用法见左侧「进阶教程 › OpenAI Codex」。</p>
+      <p>© 2025 meimeiapi.com · 官方接入指南 · 更多 Codex 用法见左侧「进阶教程 › OpenAI Codex」。</p>
     </footer>
   </article>
 </body>

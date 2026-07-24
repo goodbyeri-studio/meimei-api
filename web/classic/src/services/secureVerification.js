@@ -193,7 +193,7 @@ export const createApiCalls = {
    * @param {number} channelId - 渠道ID
    */
   viewChannelKey: (channelId) => async () => {
-    // 新系统中，验证已通过中间件处理，直接调用 API 即可
+    // 渠道密钥接口由后端根管理员权限保护，直接调用 API 即可
     const response = await API.post(`/api/channel/${channelId}/key`, {});
     return response.data;
   },

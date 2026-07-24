@@ -4,13 +4,13 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' https: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Claude Code 安装 - goodbyeri.cc 文档</title>
-  <link rel="stylesheet" href="../article.css">
+  <title>Claude Code 安装 - meimeiapi.com 文档</title>
+  <link rel="stylesheet" href="../article.css?v=b35b88632305">
 </head>
 <body class="article-body">
   <article class="doc">
-    <h1 class="doc-title">Claude Code 接入 goodbyeri.cc</h1>
-    <p>本页是 goodbyeri.cc 官方维护的 Claude Code 安装与配置指南,覆盖 Windows、Linux、macOS 与 VSCode。配置中统一使用 <code>https://goodbyeri.cc</code> 作为接入地址,密钥请在 <a href="https://goodbyeri.cc" target="_blank" rel="noopener">goodbyeri.cc</a> 控制台创建。</p>
+    <h1 class="doc-title">Claude Code 接入 meimeiapi.com</h1>
+    <p>本页是 meimeiapi.com 官方维护的 Claude Code 安装与配置指南,覆盖 Windows、Linux、macOS 与 VSCode。配置中统一使用 <code>https://meimeiapi.com</code> 作为接入地址,密钥请在 <a href="https://meimeiapi.com" target="_blank" rel="noopener">meimeiapi.com</a> 控制台创建。</p>
 
     <h2>Windows</h2>
     <h3>1. 安装 Node.js</h3>
@@ -25,11 +25,11 @@ npm --version</code></pre>
     <pre><code>{
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "你的API密钥",
-    "ANTHROPIC_BASE_URL": "https://goodbyeri.cc"
+    "ANTHROPIC_BASE_URL": "https://meimeiapi.com"
   }
 }</code></pre>
     <p>或设置环境变量(PowerShell 永久设置):</p>
-    <pre><code>[System.Environment]::SetEnvironmentVariable("ANTHROPIC_BASE_URL", "https://goodbyeri.cc", [System.EnvironmentVariableTarget]::User)
+    <pre><code>[System.Environment]::SetEnvironmentVariable("ANTHROPIC_BASE_URL", "https://meimeiapi.com", [System.EnvironmentVariableTarget]::User)
 [System.Environment]::SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", "你的API密钥", [System.EnvironmentVariableTarget]::User)</code></pre>
     <h3>4. 使用</h3>
     <pre><code>claude</code></pre>
@@ -43,7 +43,7 @@ sudo apt-get install -y nodejs</code></pre>
     <pre><code>npm install -g @anthropic-ai/claude-code</code></pre>
     <h3>3. 配置环境变量</h3>
     <pre><code># 永久设置 (bash)
-echo 'export ANTHROPIC_BASE_URL="https://goodbyeri.cc"' >> ~/.bashrc
+echo 'export ANTHROPIC_BASE_URL="https://meimeiapi.com"' >> ~/.bashrc
 echo 'export ANTHROPIC_AUTH_TOKEN="你的API密钥"' >> ~/.bashrc
 source ~/.bashrc</code></pre>
     <h3>4. 使用</h3>
@@ -57,7 +57,7 @@ brew install node</code></pre>
     <pre><code>npm install -g @anthropic-ai/claude-code</code></pre>
     <h3>3. 配置环境变量</h3>
     <pre><code># 永久设置 (zsh)
-echo 'export ANTHROPIC_BASE_URL="https://goodbyeri.cc"' >> ~/.zshrc
+echo 'export ANTHROPIC_BASE_URL="https://meimeiapi.com"' >> ~/.zshrc
 echo 'export ANTHROPIC_AUTH_TOKEN="你的API密钥"' >> ~/.zshrc
 source ~/.zshrc</code></pre>
     <h3>4. 使用</h3>
@@ -80,7 +80,7 @@ source ~/.zshrc</code></pre>
     </div>
 
     <footer class="doc-footer">
-      <p>© 2025 goodbyeri.cc · 官方接入指南 · 需要更详细的安装排错,可参阅左侧「进阶教程 › 安装 &amp; 配置」。</p>
+      <p>© 2025 meimeiapi.com · 官方接入指南 · 需要更详细的安装排错,可参阅左侧「进阶教程 › 安装 &amp; 配置」。</p>
     </footer>
   </article>
 </body>

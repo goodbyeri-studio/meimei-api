@@ -4,8 +4,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' https: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OpenAI Codex 安装配置指南 - goodbyeri.cc 文档</title>
-  <link rel="stylesheet" href="../article.css">
+  <title>OpenAI Codex 安装配置指南 - meimeiapi.com 文档</title>
+  <link rel="stylesheet" href="../article.css?v=b35b88632305">
 </head>
 <body class="article-body">
   <article class="doc">
@@ -19,18 +19,18 @@ codex --version
 codex
 
 # 绕过审批和沙盒模式启动（高级用法）
-codex --dangerously-bypass-approvals-and-sandbox</code></pre><p><strong>注意</strong>: <code>--dangerously-bypass-approvals-and-sandbox</code> 参数会绕过安全审批和沙盒限制，请谨慎使用。</p><h2 id="_2-环境配置" tabindex="-1">2. 环境配置 </h2><h3 id="方法1-powershell命令-推荐" tabindex="-1">方法1：PowerShell命令（推荐） </h3><pre><code class="language-powershell">$env:OPENAI_BASE_URL = "https://goodbyeri.cc/v1"
-$env:OPENAI_API_KEY = "你的API密钥"</code></pre><h2 id="方法2-命令提示符-cmd" tabindex="-1">方法2：命令提示符（CMD） </h2><pre><code class="language-cmd">set OPENAI_BASE_URL=https://goodbyeri.cc/v1
-set OPENAI_API_KEY=你的API密钥</code></pre><h2 id="方法3-永久设置-通过setx命令" tabindex="-1">方法3：永久设置（通过setx命令） </h2><pre><code class="language-cmd">setx OPENAI_BASE_URL "https://goodbyeri.cc/v1"
+codex --dangerously-bypass-approvals-and-sandbox</code></pre><p><strong>注意</strong>: <code>--dangerously-bypass-approvals-and-sandbox</code> 参数会绕过安全审批和沙盒限制，请谨慎使用。</p><h2 id="_2-环境配置" tabindex="-1">2. 环境配置 </h2><h3 id="方法1-powershell命令-推荐" tabindex="-1">方法1：PowerShell命令（推荐） </h3><pre><code class="language-powershell">$env:OPENAI_BASE_URL = "https://meimeiapi.com/v1"
+$env:OPENAI_API_KEY = "你的API密钥"</code></pre><h2 id="方法2-命令提示符-cmd" tabindex="-1">方法2：命令提示符（CMD） </h2><pre><code class="language-cmd">set OPENAI_BASE_URL=https://meimeiapi.com/v1
+set OPENAI_API_KEY=你的API密钥</code></pre><h2 id="方法3-永久设置-通过setx命令" tabindex="-1">方法3：永久设置（通过setx命令） </h2><pre><code class="language-cmd">setx OPENAI_BASE_URL "https://meimeiapi.com/v1"
 setx OPENAI_API_KEY "你的API密钥"</code></pre><h3 id="永久设置-添加到系统环境变量" tabindex="-1">永久设置（添加到系统环境变量） </h3><pre><code>
 **macOS/Linux:**
 ```bash
 # 临时设置
-export OPENAI_BASE_URL="https://goodbyeri.cc/v1"
+export OPENAI_BASE_URL="https://meimeiapi.com/v1"
 export OPENAI_API_KEY="你的API密钥"
 
 # 永久设置（添加到 ~/.bashrc 或 ~/.zshrc）
-echo 'export OPENAI_BASE_URL="https://goodbyeri.cc/v1"' &gt;&gt; ~/.bashrc
+echo 'export OPENAI_BASE_URL="https://meimeiapi.com/v1"' &gt;&gt; ~/.bashrc
 echo 'export OPENAI_API_KEY="你的API密钥"' &gt;&gt; ~/.bashrc
 
 source ~/.bashrc</code></pre><h3 id="codex-配置文件" tabindex="-1">Codex 配置文件 </h3><p>在 ~/.codex/config.toml 文件中添加以下配置：</p><pre><code class="language-toml">model_provider = "OpenAI"
@@ -52,7 +52,7 @@ goals = true</code></pre><p>在 ~/.codex/auth.json 文件中配置API密钥：</
 "OPENAI_API_KEY": "你的API密钥"
 }</code></pre><p>💡 使用与 Claude Code 相同的 API 密钥即可，格式如 cr_xxxxxxxxxx。</p><h2 id="相关资源" tabindex="-1">相关资源 </h2><ul><li><a href="https://platform.openai.com/docs" rel="noopener" target="_blank">OpenAI 官方文档</a></li><li><a href="https://platform.openai.com/docs/guides/code" rel="noopener" target="_blank">Codex 使用指南</a></li><li><a href="https://platform.openai.com/docs/api-reference" rel="noopener" target="_blank">API 参考</a></li><li><a href="https://community.openai.com/" rel="noopener" target="_blank">社区论坛</a></li></ul><h2 id="下一步" tabindex="-1">下一步 </h2><p>安装完成后，您可以：</p><ol><li>探索不同的编程语言支持</li><li>尝试更复杂的代码生成任务</li><li>集成到您的开发工具链中</li><li>学习高级提示工程技巧</li></ol>
     <footer class="doc-footer">
-      <p>本文由 <a href="https://goodbyeri.cc" target="_blank" rel="noopener">goodbyeri.cc</a> 文档库整理校订。接入方式:将 <code>ANTHROPIC_BASE_URL</code> 设为 <code>https://goodbyeri.cc/v1</code>,密钥使用 goodbyeri.cc 控制台创建的 API Key。</p>
+      <p>本文由 <a href="https://meimeiapi.com" target="_blank" rel="noopener">meimeiapi.com</a> 文档库整理校订。接入方式:将 <code>ANTHROPIC_BASE_URL</code> 设为 <code>https://meimeiapi.com/v1</code>,密钥使用 meimeiapi.com 控制台创建的 API Key。</p>
     </footer>
   </article>
 </body>

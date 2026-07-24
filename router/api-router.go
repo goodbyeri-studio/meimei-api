@@ -54,6 +54,7 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/ratio_config", middleware.CriticalRateLimit(), controller.GetRatioConfig)
 
 		apiRouter.POST("/stripe/webhook", anonymousRequestBodyLimit, controller.StripeWebhook)
+		apiRouter.POST("/payment/wechat/refund/notify", anonymousRequestBodyLimit, controller.WechatPayRefundNotify)
 		apiRouter.POST("/creem/webhook", anonymousRequestBodyLimit, controller.CreemWebhook)
 		apiRouter.POST("/waffo/webhook", anonymousRequestBodyLimit, controller.WaffoWebhook)
 		// :env separates test vs prod URLs so the operator can register each
@@ -183,6 +184,21 @@ func SetApiRouter(router *gin.Engine) {
 			subscriptionAdminRoute.POST("/users/:id/subscriptions/reset", controller.AdminResetUserSubscriptionsByPlan)
 			subscriptionAdminRoute.POST("/user_subscriptions/:id/invalidate", controller.AdminInvalidateUserSubscription)
 			subscriptionAdminRoute.DELETE("/user_subscriptions/:id", controller.AdminDeleteUserSubscription)
+		}
+
+		operationsRoute := apiRouter.Group("/admin/operations")
+		operationsRoute.Use(middleware.AdminAuth(), middleware.DisableCache())
+		{
+			operationsRoute.GET("/wechat/orders", controller.AdminListWechatPayOrders)
+			operationsRoute.GET("/wechat/orders/:trade_no", controller.AdminGetWechatPayOrder)
+			operationsRoute.POST("/wechat/orders/:trade_no/reconcile", controller.AdminReconcileWechatPayOrder)
+			operationsRoute.POST("/wechat/orders/:trade_no/refund", middleware.RootAuth(), middleware.CriticalRateLimit(), controller.AdminRequestWechatPayRefund)
+			operationsRoute.GET("/groups", controller.AdminListGroups)
+			operationsRoute.PUT("/groups", middleware.RootAuth(), controller.AdminUpsertGroup)
+			operationsRoute.POST("/groups/:name/disable", middleware.RootAuth(), controller.AdminDisableGroup)
+			operationsRoute.POST("/groups/:name/restore", middleware.RootAuth(), controller.AdminRestoreGroup)
+			operationsRoute.DELETE("/groups/:name", middleware.RootAuth(), controller.AdminDeleteGroup)
+			operationsRoute.GET("/channel-health", controller.AdminGetChannelHealth)
 		}
 
 		// Subscription payment callbacks (no auth)

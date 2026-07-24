@@ -28,6 +28,16 @@ func TestMigrateLegacyDocsLink(t *testing.T) {
 			expected: operation_setting.DefaultDocsLink,
 		},
 		{
+			name:     "retired goodbyeri URL without trailing slash",
+			current:  "https://goodbyeri.cc/docs",
+			expected: operation_setting.DefaultDocsLink,
+		},
+		{
+			name:     "retired goodbyeri URL with trailing slash",
+			current:  "https://goodbyeri.cc/docs/",
+			expected: operation_setting.DefaultDocsLink,
+		},
+		{
 			name:     "custom documentation URL",
 			current:  "https://docs.example.com",
 			expected: "https://docs.example.com",
