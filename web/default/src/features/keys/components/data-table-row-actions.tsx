@@ -55,6 +55,7 @@ import { copyToClipboard } from '@/lib/copy-to-clipboard'
 
 import { updateApiKeyStatus } from '../api'
 import { API_KEY_STATUS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
+import { buildCCSwitchURL } from '../lib/cc-switch'
 import { apiKeySchema } from '../types'
 import { useApiKeys } from './api-keys-provider'
 
@@ -80,39 +81,14 @@ export function DataTableRowActions<TData>({
 }: DataTableRowActionsProps<TData>) {
   const { t } = useTranslation()
   const apiKey = apiKeySchema.parse(row.original)
-  const {
-    setOpen,
-    setCurrentRow,
-    triggerRefresh,
-    setResolvedKey,
-    resolveRealKey,
-    resolvedKeys,
-    loadingKeys,
-  } = useApiKeys()
+  const { setOpen, setCurrentRow, triggerRefresh, resolveRealKey } =
+    useApiKeys()
   const isEnabled = apiKey.status === API_KEY_STATUS.ENABLED
   const { chatPresets, serverAddress } = useChatPresets()
   const [isTogglingStatus, setIsTogglingStatus] = useState(false)
-  const resolvedRealKey = resolvedKeys[apiKey.id]
-  const isRealKeyLoading = Boolean(loadingKeys[apiKey.id])
 
   const hasChatPresets = chatPresets.length > 0
   const toggleLabel = isEnabled ? t('Disable') : t('Enable')
-
-  const handleMenuOpenChange = useCallback(
-    (open: boolean) => {
-      if (open && !resolvedRealKey && !isRealKeyLoading) {
-        void resolveRealKey(apiKey.id)
-      }
-    },
-    [apiKey.id, isRealKeyLoading, resolvedRealKey, resolveRealKey]
-  )
-
-  const getCachedRealKey = useCallback(() => {
-    if (resolvedRealKey) return resolvedRealKey
-    void resolveRealKey(apiKey.id)
-    toast.info(t('API key is loading, please try again in a moment'))
-    return null
-  }, [apiKey.id, resolvedRealKey, resolveRealKey, t])
 
   const handleOpenChatPreset = useCallback(
     async (preset: ChatPreset) => {
@@ -236,11 +212,10 @@ export function DataTableRowActions<TData>({
         ariaLabel={t('Open menu')}
         contentClassName='w-[200px]'
         modal={false}
-        onOpenChange={handleMenuOpenChange}
       >
         <DropdownMenuItem
           onClick={async () => {
-            const realKey = getCachedRealKey()
+            const realKey = await resolveRealKey(apiKey.id)
             if (!realKey) return
             const ok = await copyToClipboard(realKey)
             if (ok) toast.success(t('Copied'))
@@ -253,7 +228,7 @@ export function DataTableRowActions<TData>({
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={async () => {
-            const realKey = getCachedRealKey()
+            const realKey = await resolveRealKey(apiKey.id)
             if (!realKey) return
             const connStr = encodeChannelConnectionInfo(
               realKey,
@@ -273,9 +248,41 @@ export function DataTableRowActions<TData>({
           onClick={async () => {
             const realKey = await resolveRealKey(apiKey.id)
             if (!realKey) return
-            setResolvedKey(realKey)
-            setCurrentRow(apiKey)
-            setOpen('cc-switch')
+
+            let ccSwitchUrl: string
+            try {
+              ccSwitchUrl = buildCCSwitchURL({
+                group: apiKey.group || '',
+                apiKey: realKey,
+                serverAddress: getServerAddress(),
+              })
+            } catch {
+              toast.error(
+                t(
+                  'Unable to open CC Switch because the server address is invalid. Please contact your administrator.'
+                )
+              )
+              return
+            }
+
+            try {
+              window.open(ccSwitchUrl, '_self')
+              window.setTimeout(() => {
+                if (document.hasFocus()) {
+                  toast.info(
+                    t(
+                      'If CC Switch did not open, make sure it is installed and try again.'
+                    )
+                  )
+                }
+              }, 100)
+            } catch {
+              toast.error(
+                t(
+                  'If CC Switch did not open, make sure it is installed and try again.'
+                )
+              )
+            }
           }}
         >
           {t('CC Switch')}
