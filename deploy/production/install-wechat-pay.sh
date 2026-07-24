@@ -3,8 +3,9 @@ set -Eeuo pipefail
 
 BUNDLE_DIR="${1:-}"
 RELEASE_ID="${2:-}"
+APP_ROOT="${APP_ROOT:-/opt/meimei-api}"
 BASE_ENV_FILE="${WECHAT_PAY_ENV_FILE:-/etc/meimei-api/production.env}"
-SECRET_ROOT="${WECHAT_PAY_SECRET_DIR:-/etc/meimei-api/secrets/wechatpay}"
+SECRET_ROOT="${WECHAT_PAY_SECRET_DIR:-$APP_ROOT/.secrets/wechatpay}"
 RELEASES_DIR="$SECRET_ROOT/releases"
 RELEASE_DIR="$RELEASES_DIR/$RELEASE_ID"
 STAGING_DIR=''
@@ -14,7 +15,7 @@ fail() {
   exit 1
 }
 
-if [[ "${EUID:-$(id -u)}" -ne 0 && "$BASE_ENV_FILE" == /etc/* ]]; then
+if [[ "${EUID:-$(id -u)}" -ne 0 && "$SECRET_ROOT" == /etc/* ]]; then
   exec sudo -n -- "$0" "$@"
 fi
 
@@ -42,7 +43,7 @@ grep -qx 'WECHAT_PAY_PUBLIC_KEY_PATH=/run/secrets/wechatpay/wechatpay-public-key
 openssl pkey -in "$MERCHANT_KEY" -check -noout >/dev/null || fail 'merchant private key is invalid'
 openssl pkey -pubin -in "$PUBLIC_KEY" -noout >/dev/null || fail 'WeChat Pay public key is invalid'
 
-install -m 700 -d "$RELEASES_DIR"
+install -m 700 -d "$SECRET_ROOT" "$RELEASES_DIR"
 [[ ! -e "$RELEASE_DIR" ]] || fail "configuration release already exists: $RELEASE_ID"
 STAGING_DIR=$(mktemp -d "$RELEASES_DIR/.staging.$RELEASE_ID.XXXXXX")
 chmod 700 "$STAGING_DIR"
@@ -51,8 +52,12 @@ install -m 600 "$PUBLIC_KEY" "$STAGING_DIR/wechatpay-public-key.pem"
 
 awk '!/^WECHAT_PAY_/' "$BASE_ENV_FILE" > "$STAGING_DIR/production.env"
 cat "$PAYMENT_ENV" >> "$STAGING_DIR/production.env"
-chmod --reference="$BASE_ENV_FILE" "$STAGING_DIR/production.env"
-chown --reference="$BASE_ENV_FILE" "$STAGING_DIR/production.env"
+if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+  chmod --reference="$BASE_ENV_FILE" "$STAGING_DIR/production.env"
+  chown --reference="$BASE_ENV_FILE" "$STAGING_DIR/production.env"
+else
+  chmod 600 "$STAGING_DIR/production.env"
+fi
 
 # The rename is the only commit point. Until it succeeds, no deployment can
 # reference this release and the currently running configuration is untouched.

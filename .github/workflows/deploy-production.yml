@@ -368,7 +368,7 @@ jobs:
               "$PROD_DEPLOY_USER@$PROD_HOST:$remote_bundle/"
             # shellcheck disable=SC2029
             ssh "${ssh_args[@]}" "$PROD_DEPLOY_USER@$PROD_HOST" \
-              "cd '$PROD_APP_ROOT' && chmod 700 ./install-wechat-pay.sh && ./install-wechat-pay.sh '$remote_bundle' '$PAYMENT_RELEASE_ID'"
+              "cd '$PROD_APP_ROOT' && chmod 700 ./install-wechat-pay.sh && APP_ROOT='$PROD_APP_ROOT' ./install-wechat-pay.sh '$remote_bundle' '$PAYMENT_RELEASE_ID'"
           fi
       - name: Authenticate production host to DOCR
         env:
