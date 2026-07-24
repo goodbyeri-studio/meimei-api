@@ -9,6 +9,12 @@ PREVIOUS_RELEASE="$STATE_DIR/previous.env"
 CANDIDATE_RELEASE="$STATE_DIR/candidate.env"
 LOCK_FILE="$STATE_DIR/deploy.lock"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/healthz/ready}"
+WECHAT_PAY_SECRET_ROOT="${WECHAT_PAY_SECRET_DIR:-/etc/meimei-api/secrets/wechatpay}"
+BASE_ENV_FILE="${MEIMEI_API_BASE_ENV_FILE:-/etc/meimei-api/production.env}"
+DATA_DIR="${MEIMEI_API_DATA_DIR:-/var/lib/meimei-api/data}"
+LOG_DIR="${MEIMEI_API_LOG_DIR:-/var/log/meimei-api}"
+READY_ATTEMPTS="${READY_ATTEMPTS:-30}"
+READY_DELAY_SECONDS="${READY_DELAY_SECONDS:-3}"
 
 log() {
   printf '[meimei-api-deploy] %s\n' "$*"
@@ -32,18 +38,20 @@ require_sha() {
 
 require_layout() {
   [[ -f "$COMPOSE_FILE" ]] || fail "missing production compose file: $COMPOSE_FILE"
-  [[ -f /etc/meimei-api/production.env ]] || fail "missing /etc/meimei-api/production.env"
-  mkdir -p "$STATE_DIR" /var/lib/meimei-api/data /var/log/meimei-api
+  [[ -f "$BASE_ENV_FILE" ]] || fail "missing $BASE_ENV_FILE"
+  [[ "$WECHAT_PAY_SECRET_ROOT" =~ ^/[A-Za-z0-9._/-]+$ && "$WECHAT_PAY_SECRET_ROOT" != *'..'* ]] || \
+    fail 'WeChat Pay secret root must be an absolute path without parent traversal'
+  mkdir -p "$STATE_DIR" "$DATA_DIR" "$LOG_DIR"
 }
 
 wait_for_ready() {
   local attempts=0
   until curl --fail --silent --show-error --max-time 5 "$HEALTH_URL" >/dev/null; do
     attempts=$((attempts + 1))
-    if (( attempts >= 30 )); then
+    if (( attempts >= READY_ATTEMPTS )); then
       return 1
     fi
-    sleep 3
+    sleep "$READY_DELAY_SECONDS"
   done
 }
 
@@ -57,20 +65,33 @@ write_release() {
   local release_file="$1"
   local image_ref="$2"
   local commit_sha="$3"
+  local payment_release="${4:-}"
   local temporary_file="$release_file.tmp"
   umask 077
-  printf 'MEIMEI_API_IMAGE=%s\nDEPLOYED_SHA=%s\n' "$image_ref" "$commit_sha" > "$temporary_file"
+  {
+    printf 'MEIMEI_API_IMAGE=%s\nDEPLOYED_SHA=%s\n' "$image_ref" "$commit_sha"
+    if [[ -n "$payment_release" ]]; then
+      local payment_dir="$WECHAT_PAY_SECRET_ROOT/releases/$payment_release"
+      [[ "$payment_release" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || fail 'payment release ID is invalid'
+      [[ -s "$payment_dir/production.env" ]] || fail "payment environment release is missing: $payment_release"
+      [[ -s "$payment_dir/merchant-private-key.pem" ]] || fail "merchant private key release is missing: $payment_release"
+      [[ -s "$payment_dir/wechatpay-public-key.pem" ]] || fail "WeChat Pay public key release is missing: $payment_release"
+      printf 'MEIMEI_API_ENV_FILE=%s/production.env\n' "$payment_dir"
+      printf 'WECHAT_PAY_SECRET_RELEASE_DIR=%s\n' "$payment_dir"
+    fi
+  } > "$temporary_file"
   mv "$temporary_file" "$release_file"
 }
 
 deploy() {
   local image_ref="$1"
   local commit_sha="$2"
+  local payment_release="$3"
   require_image_ref "$image_ref"
   require_sha "$commit_sha"
   require_layout
 
-  write_release "$CANDIDATE_RELEASE" "$image_ref" "$commit_sha"
+  write_release "$CANDIDATE_RELEASE" "$image_ref" "$commit_sha" "$payment_release"
   log "pulling $image_ref"
   compose "$CANDIDATE_RELEASE" pull
 
@@ -79,7 +100,7 @@ deploy() {
   fi
   mv "$CANDIDATE_RELEASE" "$CURRENT_RELEASE"
   log "starting commit $commit_sha"
-  if compose "$CURRENT_RELEASE" up -d --remove-orphans && wait_for_ready; then
+  if compose "$CURRENT_RELEASE" up -d --remove-orphans --force-recreate && wait_for_ready; then
     log "deployment ready: $commit_sha"
     return 0
   fi
@@ -87,7 +108,7 @@ deploy() {
   log "readiness failed; attempting rollback"
   if [[ -f "$PREVIOUS_RELEASE" ]]; then
     cp "$PREVIOUS_RELEASE" "$CURRENT_RELEASE"
-    compose "$CURRENT_RELEASE" up -d --remove-orphans
+    compose "$CURRENT_RELEASE" up -d --remove-orphans --force-recreate
     wait_for_ready || fail "deployment and automatic rollback both failed"
     fail "deployment failed; previous release restored"
   fi
@@ -107,12 +128,12 @@ rollback() {
   cp "$PREVIOUS_RELEASE" "$CURRENT_RELEASE"
   mv "$temporary_file" "$PREVIOUS_RELEASE"
   if ! compose "$CURRENT_RELEASE" pull || \
-    ! compose "$CURRENT_RELEASE" up -d --remove-orphans || \
+    ! compose "$CURRENT_RELEASE" up -d --remove-orphans --force-recreate || \
     ! wait_for_ready; then
     cp "$CURRENT_RELEASE" "$temporary_file"
     cp "$PREVIOUS_RELEASE" "$CURRENT_RELEASE"
     mv "$temporary_file" "$PREVIOUS_RELEASE"
-    compose "$CURRENT_RELEASE" up -d --remove-orphans
+    compose "$CURRENT_RELEASE" up -d --remove-orphans --force-recreate
     wait_for_ready || fail "rollback and rollback recovery both failed"
     fail "rollback failed; previous current release restored"
   fi
@@ -129,15 +150,15 @@ main() {
 
   case "$operation" in
     deploy)
-      [[ $# -eq 3 ]] || fail "usage: $0 deploy <image-digest> <commit-sha>"
-      deploy "$2" "$3"
+      [[ $# -eq 4 ]] || fail "usage: $0 deploy <image-digest> <commit-sha> <payment-release>"
+      deploy "$2" "$3" "$4"
       ;;
     rollback)
       [[ $# -eq 1 ]] || fail "usage: $0 rollback"
       rollback
       ;;
     *)
-      fail "usage: $0 {deploy <image-digest> <commit-sha>|rollback}"
+      fail "usage: $0 {deploy <image-digest> <commit-sha> <payment-release>|rollback}"
       ;;
   esac
 }

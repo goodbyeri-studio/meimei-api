@@ -28,6 +28,7 @@ export function formatDuration(
 ): string {
   const unit = plan?.duration_unit || 'month'
   const value = plan?.duration_value || 1
+  if (unit === 'permanent') return t('Permanent')
   const unitLabels: Record<string, string> = {
     year: t('years'),
     month: t('months'),

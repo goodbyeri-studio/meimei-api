@@ -25,42 +25,78 @@ var defaultCNYSubscriptionPlans = []defaultSubscriptionPlan{
 	{title: "企业包", subtitle: "适合企业级高并发场景", amount: 2000},
 }
 
-// seedDefaultCNYSubscriptionPlans initializes the default plan catalog only
-// for a brand-new installation. Existing administrator-managed plans are never
-// changed or supplemented automatically.
+// seedDefaultCNYSubscriptionPlans initializes a brand-new catalog and upgrades
+// only untouched legacy built-ins to the current permanent-duration contract.
 func seedDefaultCNYSubscriptionPlans() error {
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var count int64
 		if err := tx.Model(&SubscriptionPlan{}).Count(&count).Error; err != nil {
 			return err
 		}
-		if count > 0 {
-			return nil
+		if count == 0 {
+			plans := make([]SubscriptionPlan, 0, len(defaultCNYSubscriptionPlans))
+			for index, item := range defaultCNYSubscriptionPlans {
+				quota, clamp := common.QuotaFromDecimalChecked(
+					decimal.NewFromInt(item.amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
+				)
+				if clamp != nil || quota <= 0 {
+					return errors.New("默认套餐额度超出允许范围")
+				}
+				plans = append(plans, SubscriptionPlan{
+					Title:               item.title,
+					Subtitle:            item.subtitle,
+					PriceAmount:         float64(item.amount),
+					Currency:            "CNY",
+					DurationUnit:        SubscriptionDurationPermanent,
+					DurationValue:       0,
+					Enabled:             true,
+					SortOrder:           len(defaultCNYSubscriptionPlans) - index,
+					AllowBalancePay:     common.GetPointer(true),
+					AllowWalletOverflow: common.GetPointer(true),
+					TotalAmount:         int64(quota),
+					QuotaResetPeriod:    SubscriptionResetNever,
+				})
+			}
+			return tx.Create(&plans).Error
 		}
 
-		plans := make([]SubscriptionPlan, 0, len(defaultCNYSubscriptionPlans))
-		for index, item := range defaultCNYSubscriptionPlans {
+		// Upgrade only untouched built-in monthly plans. Matching the complete
+		// business fingerprint avoids changing administrator-managed plans.
+		for _, item := range defaultCNYSubscriptionPlans {
 			quota, clamp := common.QuotaFromDecimalChecked(
 				decimal.NewFromInt(item.amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
 			)
 			if clamp != nil || quota <= 0 {
 				return errors.New("默认套餐额度超出允许范围")
 			}
-			plans = append(plans, SubscriptionPlan{
-				Title:               item.title,
-				Subtitle:            item.subtitle,
-				PriceAmount:         float64(item.amount),
-				Currency:            "CNY",
-				DurationUnit:        SubscriptionDurationMonth,
-				DurationValue:       1,
-				Enabled:             true,
-				SortOrder:           len(defaultCNYSubscriptionPlans) - index,
-				AllowBalancePay:     common.GetPointer(true),
-				AllowWalletOverflow: common.GetPointer(true),
-				TotalAmount:         int64(quota),
-				QuotaResetPeriod:    SubscriptionResetNever,
-			})
+			legacyPlanQuery := tx.Model(&SubscriptionPlan{}).
+				Where("title = ? AND subtitle = ? AND currency = ? AND price_amount = ? AND duration_unit = ? AND duration_value = ? AND custom_seconds = ? AND total_amount = ? AND quota_reset_period = ?",
+					item.title, item.subtitle, "CNY", float64(item.amount), SubscriptionDurationMonth, 1, 0, int64(quota), SubscriptionResetNever)
+			var legacyPlanIds []int
+			if err := legacyPlanQuery.Pluck("id", &legacyPlanIds).Error; err != nil {
+				return err
+			}
+			if len(legacyPlanIds) == 0 {
+				continue
+			}
+			if err := tx.Model(&SubscriptionPlan{}).
+				Where("id IN ?", legacyPlanIds).
+				Updates(map[string]interface{}{
+					"duration_unit":  SubscriptionDurationPermanent,
+					"duration_value": 0,
+					"custom_seconds": 0,
+				}).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&UserSubscription{}).
+				Where("plan_id IN ? AND status = ?", legacyPlanIds, "active").
+				Updates(map[string]interface{}{
+					"end_time":        0,
+					"next_reset_time": 0,
+				}).Error; err != nil {
+				return err
+			}
 		}
-		return tx.Create(&plans).Error
+		return nil
 	})
 }

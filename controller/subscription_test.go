@@ -69,3 +69,55 @@ func TestGetSubscriptionSelfReportsSubscriptionQueryFailure(t *testing.T) {
 	assert.False(t, response.Success)
 	assert.NotEmpty(t, response.Message)
 }
+
+func TestNormalizeSubscriptionPlanDuration(t *testing.T) {
+	tests := []struct {
+		name       string
+		plan       model.SubscriptionPlan
+		wantUnit   string
+		wantValue  int
+		wantCustom int64
+		wantError  bool
+	}{
+		{
+			name:       "permanent clears finite fields",
+			plan:       model.SubscriptionPlan{DurationUnit: model.SubscriptionDurationPermanent, DurationValue: 12, CustomSeconds: 3600},
+			wantUnit:   model.SubscriptionDurationPermanent,
+			wantValue:  0,
+			wantCustom: 0,
+		},
+		{
+			name:       "missing duration keeps legacy monthly default",
+			plan:       model.SubscriptionPlan{},
+			wantUnit:   model.SubscriptionDurationMonth,
+			wantValue:  1,
+			wantCustom: 0,
+		},
+		{
+			name:      "custom requires positive seconds",
+			plan:      model.SubscriptionPlan{DurationUnit: model.SubscriptionDurationCustom},
+			wantUnit:  model.SubscriptionDurationCustom,
+			wantError: true,
+		},
+		{
+			name:      "unknown duration is rejected",
+			plan:      model.SubscriptionPlan{DurationUnit: "forever"},
+			wantUnit:  "forever",
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := normalizeSubscriptionPlanDuration(&tt.plan)
+			if tt.wantError {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantUnit, tt.plan.DurationUnit)
+			assert.Equal(t, tt.wantValue, tt.plan.DurationValue)
+			assert.Equal(t, tt.wantCustom, tt.plan.CustomSeconds)
+		})
+	}
+}

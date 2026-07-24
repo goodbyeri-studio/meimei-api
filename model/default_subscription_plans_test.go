@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,6 +23,102 @@ func TestSeedDefaultSubscriptionPlansIsIdempotent(t *testing.T) {
 	assert.Equal(t, "CNY", plans[0].Currency)
 	assert.Equal(t, float64(10), plans[0].PriceAmount)
 	assert.Greater(t, plans[0].TotalAmount, int64(0))
+	assert.Equal(t, SubscriptionDurationPermanent, plans[0].DurationUnit)
+	assert.Zero(t, plans[0].DurationValue)
+}
+
+func TestSeedDefaultSubscriptionPlansMigratesOnlyUntouchedBuiltIns(t *testing.T) {
+	truncateTables(t)
+
+	quota, clamp := common.QuotaFromDecimalChecked(
+		decimal.NewFromInt(10).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
+	)
+	require.Nil(t, clamp)
+	legacyDefault := &SubscriptionPlan{
+		Title:            "轻量包",
+		Subtitle:         "适合少量体验与临时调用",
+		PriceAmount:      10,
+		Currency:         "CNY",
+		DurationUnit:     SubscriptionDurationMonth,
+		DurationValue:    1,
+		TotalAmount:      int64(quota),
+		QuotaResetPeriod: SubscriptionResetNever,
+	}
+	modifiedPlan := &SubscriptionPlan{
+		Title:            "入门包",
+		Subtitle:         "管理员修改过的说明",
+		PriceAmount:      20,
+		Currency:         "CNY",
+		DurationUnit:     SubscriptionDurationMonth,
+		DurationValue:    1,
+		TotalAmount:      int64(quota) * 2,
+		QuotaResetPeriod: SubscriptionResetNever,
+	}
+	require.NoError(t, DB.Create(legacyDefault).Error)
+	require.NoError(t, DB.Create(modifiedPlan).Error)
+	legacySubscription := &UserSubscription{
+		UserId:    1001,
+		PlanId:    legacyDefault.Id,
+		StartTime: time.Now().Add(-time.Hour).Unix(),
+		EndTime:   time.Now().Add(30 * 24 * time.Hour).Unix(),
+		Status:    "active",
+	}
+	require.NoError(t, DB.Create(legacySubscription).Error)
+
+	require.NoError(t, seedDefaultCNYSubscriptionPlans())
+
+	var migrated SubscriptionPlan
+	require.NoError(t, DB.First(&migrated, legacyDefault.Id).Error)
+	assert.Equal(t, SubscriptionDurationPermanent, migrated.DurationUnit)
+	assert.Zero(t, migrated.DurationValue)
+	var migratedSubscription UserSubscription
+	require.NoError(t, DB.First(&migratedSubscription, legacySubscription.Id).Error)
+	assert.Zero(t, migratedSubscription.EndTime)
+
+	var preserved SubscriptionPlan
+	require.NoError(t, DB.First(&preserved, modifiedPlan.Id).Error)
+	assert.Equal(t, SubscriptionDurationMonth, preserved.DurationUnit)
+	assert.Equal(t, 1, preserved.DurationValue)
+}
+
+func TestPermanentSubscriptionParticipatesInActiveBilling(t *testing.T) {
+	truncateTables(t)
+
+	user := &User{Username: "permanent-subscription-user", Status: common.UserStatusEnabled}
+	require.NoError(t, DB.Create(user).Error)
+	plan := &SubscriptionPlan{
+		Title:            "永久套餐",
+		PriceAmount:      10,
+		Currency:         "CNY",
+		DurationUnit:     SubscriptionDurationPermanent,
+		DurationValue:    0,
+		Enabled:          true,
+		TotalAmount:      1000,
+		QuotaResetPeriod: SubscriptionResetNever,
+	}
+	require.NoError(t, DB.Create(plan).Error)
+
+	tx := DB.Begin()
+	require.NoError(t, tx.Error)
+	t.Cleanup(func() { _ = tx.Rollback().Error })
+	subscription, err := CreateUserSubscriptionFromPlanTx(tx, user.Id, plan, "test")
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit().Error)
+	assert.Zero(t, subscription.EndTime)
+
+	active, err := HasActiveUserSubscription(user.Id)
+	require.NoError(t, err)
+	assert.True(t, active)
+
+	require.NoError(t, DB.AutoMigrate(&SubscriptionPreConsumeRecord{}))
+	consume, err := PreConsumeUserSubscription("permanent-subscription-request", user.Id, "test-model", 0, 100)
+	require.NoError(t, err)
+	assert.Equal(t, subscription.Id, consume.UserSubscriptionId)
+	assert.EqualValues(t, 100, consume.PreConsumed)
+
+	expired, err := ExpireDueSubscriptions(10)
+	require.NoError(t, err)
+	assert.Zero(t, expired)
 }
 
 func TestSeedDefaultSubscriptionPlansPreservesAdminCatalog(t *testing.T) {

@@ -3353,6 +3353,7 @@
     "Period": "Khoảng thời gian",
     "Periodically check for upstream model changes": "Kiểm tra định kỳ các thay đổi mô hình nguồn",
     "Periodically send ping frames to keep streaming connections active.": "Định kỳ gửi các khung ping để duy trì các kết nối truyền phát hoạt động.",
+    "Permanent": "Vĩnh viễn",
     "Permanently delete your account and all data": "Xóa vĩnh viễn tài khoản của bạn và tất cả dữ liệu",
     "Permit Passkey registration on non-HTTPS origins (only recommended for development)": "Cho phép đăng ký Passkey trên các nguồn gốc không phải HTTPS (chỉ khuyến nghị cho mục đích phát triển)",
     "Perplexity": "Sự bối rối",

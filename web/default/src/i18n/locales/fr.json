@@ -3353,6 +3353,7 @@
     "Period": "Période",
     "Periodically check for upstream model changes": "Vérifier périodiquement les changements de modèles en amont",
     "Periodically send ping frames to keep streaming connections active.": "Envoyer périodiquement des trames ping pour maintenir les connexions de streaming actives.",
+    "Permanent": "Permanent",
     "Permanently delete your account and all data": "Supprimer définitivement votre compte et toutes les données",
     "Permit Passkey registration on non-HTTPS origins (only recommended for development)": "Autoriser l'enregistrement de Passkey sur des origines non-HTTPS (recommandé uniquement pour le développement)",
     "Perplexity": "Perplexity",

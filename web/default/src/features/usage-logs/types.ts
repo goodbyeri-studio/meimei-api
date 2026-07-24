@@ -47,6 +47,7 @@ export interface CommonFilters {
  * Common logs specific filters
  */
 export interface CommonLogFilters extends CommonFilters {
+  type?: string
   model?: string
   token?: string
   group?: string

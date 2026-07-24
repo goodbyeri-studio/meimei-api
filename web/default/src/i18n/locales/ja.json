@@ -3353,6 +3353,7 @@
     "Period": "期間",
     "Periodically check for upstream model changes": "アップストリームモデルの変更を定期的にチェック",
     "Periodically send ping frames to keep streaming connections active.": "ストリーミング接続をアクティブに保つために、定期的にpingフレームを送信します。",
+    "Permanent": "永久",
     "Permanently delete your account and all data": "アカウントとすべてのデータを永久に削除",
     "Permit Passkey registration on non-HTTPS origins (only recommended for development)": "非HTTPSオリジンでのパスキー登録を許可する（開発でのみ推奨）",
     "Perplexity": "Perplexity",

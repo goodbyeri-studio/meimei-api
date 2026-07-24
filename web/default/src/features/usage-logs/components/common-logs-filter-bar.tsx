@@ -25,12 +25,24 @@ import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
-import { DEFAULT_BILLING_LOG_TYPE_VALUE } from '../constants'
+import {
+  DEFAULT_BILLING_LOG_TYPE_VALUE,
+  LOG_TYPE_ALL_VALUE,
+  LOG_TYPE_FILTERS,
+} from '../constants'
 import { buildSearchParams } from '../lib/filter'
 import { getDefaultTimeRange } from '../lib/utils'
 import type { CommonLogFilters } from '../types'
@@ -60,6 +72,7 @@ function buildSearchSourceKey(values: {
   username?: unknown
   requestId?: unknown
   upstreamRequestId?: unknown
+  type?: unknown
 }) {
   return [
     values.startTime,
@@ -71,6 +84,7 @@ function buildSearchSourceKey(values: {
     values.username,
     values.requestId,
     values.upstreamRequestId,
+    values.type,
   ]
     .map((value) => String(value ?? ''))
     .join('\u001f')
@@ -103,6 +117,7 @@ export function CommonLogsFilterBar<TData>(
       username: searchParams.username,
       requestId: searchParams.requestId,
       upstreamRequestId: searchParams.upstreamRequestId,
+      type: searchParams.type,
     }
     const filters: CommonLogFilters = {
       startTime: searchParams.startTime
@@ -116,6 +131,13 @@ export function CommonLogsFilterBar<TData>(
       username: searchParams.username || undefined,
       requestId: searchParams.requestId || undefined,
       upstreamRequestId: searchParams.upstreamRequestId || undefined,
+      type: isAdmin
+        ? String(
+            Array.isArray(searchParams.type)
+              ? (searchParams.type[0] ?? LOG_TYPE_ALL_VALUE)
+              : (searchParams.type ?? LOG_TYPE_ALL_VALUE)
+          )
+        : DEFAULT_BILLING_LOG_TYPE_VALUE,
     }
     return {
       sourceKey: buildSearchSourceKey(sourceValues),
@@ -131,6 +153,8 @@ export function CommonLogsFilterBar<TData>(
     searchParams.username,
     searchParams.requestId,
     searchParams.upstreamRequestId,
+    searchParams.type,
+    isAdmin,
   ])
   const [draft, setDraft] = useState<CommonLogDraft>(() => searchState)
   const activeDraft =
@@ -158,19 +182,27 @@ export function CommonLogsFilterBar<TData>(
       params: { section: 'common' },
       search: {
         ...filterParams,
-        type: [DEFAULT_BILLING_LOG_TYPE_VALUE],
+        type: [
+          isAdmin
+            ? filters.type || LOG_TYPE_ALL_VALUE
+            : DEFAULT_BILLING_LOG_TYPE_VALUE,
+        ],
         page: 1,
       },
     })
     queryClient.invalidateQueries({ queryKey: ['logs'] })
     queryClient.invalidateQueries({ queryKey: ['usage-logs-stats'] })
-  }, [filters, navigate, queryClient])
+  }, [filters, isAdmin, navigate, queryClient])
 
   const handleReset = useCallback(() => {
     const { start, end } = getDefaultTimeRange()
-    const resetFilters: CommonLogFilters = { startTime: start, endTime: end }
+    const resetFilters: CommonLogFilters = {
+      startTime: start,
+      endTime: end,
+      type: isAdmin ? LOG_TYPE_ALL_VALUE : DEFAULT_BILLING_LOG_TYPE_VALUE,
+    }
     const resetSearch = {
-      type: [DEFAULT_BILLING_LOG_TYPE_VALUE],
+      type: [isAdmin ? LOG_TYPE_ALL_VALUE : DEFAULT_BILLING_LOG_TYPE_VALUE],
       startTime: start.getTime(),
       endTime: end.getTime(),
     }
@@ -189,7 +221,7 @@ export function CommonLogsFilterBar<TData>(
     })
     queryClient.invalidateQueries({ queryKey: ['logs'] })
     queryClient.invalidateQueries({ queryKey: ['usage-logs-stats'] })
-  }, [navigate, queryClient])
+  }, [isAdmin, navigate, queryClient])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -206,7 +238,10 @@ export function CommonLogsFilterBar<TData>(
     !!filters.upstreamRequestId
 
   const hasAdditionalFilters =
-    !!filters.model || !!filters.group || hasExpandedFilters
+    !!filters.model ||
+    !!filters.group ||
+    (isAdmin && filters.type !== LOG_TYPE_ALL_VALUE) ||
+    hasExpandedFilters
 
   const expandedFilterCount = [
     filters.token,
@@ -255,6 +290,33 @@ export function CommonLogsFilterBar<TData>(
       />
     </LogsFilterField>
   )
+  const typeFilter = isAdmin ? (
+    <LogsFilterField>
+      <Select
+        items={LOG_TYPE_FILTERS.map((option) => ({
+          value: option.value,
+          label: t(option.label),
+        }))}
+        value={filters.type || LOG_TYPE_ALL_VALUE}
+        onValueChange={(value) =>
+          handleChange('type', value ?? LOG_TYPE_ALL_VALUE)
+        }
+      >
+        <SelectTrigger className='h-8'>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          <SelectGroup>
+            {LOG_TYPE_FILTERS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {t(option.label)}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </LogsFilterField>
+  ) : null
   const modelFilter = (
     <LogsFilterField>
       <LogsFilterInput
@@ -335,6 +397,7 @@ export function CommonLogsFilterBar<TData>(
       primaryFilters={
         <>
           {dateRangeFilter}
+          {typeFilter}
           {modelFilter}
           {groupFilter}
         </>
@@ -344,6 +407,7 @@ export function CommonLogsFilterBar<TData>(
       mobileFilters={
         <>
           {modelFilter}
+          {typeFilter}
           {groupFilter}
           {advancedFilters}
         </>

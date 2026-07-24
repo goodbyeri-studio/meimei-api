@@ -22,7 +22,10 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { DataTableRowActionMenu, StaticDataTable } from '@/components/data-table'
+import {
+  DataTableRowActionMenu,
+  StaticDataTable,
+} from '@/components/data-table'
 import {
   sideDrawerContentClassName,
   sideDrawerFormClassName,
@@ -329,7 +332,10 @@ export function UserSubscriptionsDialog(props: Props) {
                           {t('Start')}: {formatTimestamp(sub.start_time)}
                         </div>
                         <div>
-                          {t('End')}: {formatTimestamp(sub.end_time)}
+                          {t('End')}:{' '}
+                          {sub.end_time === 0
+                            ? t('Permanent')
+                            : formatTimestamp(sub.end_time)}
                         </div>
                       </div>
                     )

@@ -157,6 +157,32 @@ func normalizeSubscriptionCurrency(currency string) (string, bool) {
 	}
 }
 
+func normalizeSubscriptionPlanDuration(plan *model.SubscriptionPlan) error {
+	plan.DurationUnit = strings.TrimSpace(plan.DurationUnit)
+	if plan.DurationUnit == "" {
+		plan.DurationUnit = model.SubscriptionDurationMonth
+	}
+	switch plan.DurationUnit {
+	case model.SubscriptionDurationPermanent:
+		plan.DurationValue = 0
+		plan.CustomSeconds = 0
+	case model.SubscriptionDurationYear, model.SubscriptionDurationMonth,
+		model.SubscriptionDurationDay, model.SubscriptionDurationHour:
+		if plan.DurationValue <= 0 {
+			plan.DurationValue = 1
+		}
+		plan.CustomSeconds = 0
+	case model.SubscriptionDurationCustom:
+		plan.DurationValue = 0
+		if plan.CustomSeconds <= 0 {
+			return fmt.Errorf("自定义套餐有效期需大于0秒")
+		}
+	default:
+		return fmt.Errorf("不支持的套餐有效期类型")
+	}
+	return nil
+}
+
 func AdminCreateSubscriptionPlan(c *gin.Context) {
 	if !requirePaymentCompliance(c) {
 		return
@@ -192,11 +218,9 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 	if req.Plan.AllowWalletOverflow == nil {
 		req.Plan.AllowWalletOverflow = common.GetPointer(true)
 	}
-	if req.Plan.DurationUnit == "" {
-		req.Plan.DurationUnit = model.SubscriptionDurationMonth
-	}
-	if req.Plan.DurationValue <= 0 && req.Plan.DurationUnit != model.SubscriptionDurationCustom {
-		req.Plan.DurationValue = 1
+	if err := normalizeSubscriptionPlanDuration(&req.Plan); err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
 	}
 	if req.Plan.MaxPurchasePerUser < 0 {
 		common.ApiErrorMsg(c, "购买上限不能为负数")
@@ -268,11 +292,9 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 		return
 	}
 	req.Plan.Currency = currency
-	if req.Plan.DurationUnit == "" {
-		req.Plan.DurationUnit = model.SubscriptionDurationMonth
-	}
-	if req.Plan.DurationValue <= 0 && req.Plan.DurationUnit != model.SubscriptionDurationCustom {
-		req.Plan.DurationValue = 1
+	if err := normalizeSubscriptionPlanDuration(&req.Plan); err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
 	}
 	if req.Plan.MaxPurchasePerUser < 0 {
 		common.ApiErrorMsg(c, "购买上限不能为负数")

@@ -53,8 +53,11 @@ export function CommonLogsStats() {
   const { isAdminView: isAdmin } = useLogsViewScope()
   const searchParams = route.useSearch()
   const effectiveSearchParams = useMemo(
-    () => ({ ...searchParams, type: [DEFAULT_BILLING_LOG_TYPE_VALUE] }),
-    [searchParams]
+    () =>
+      isAdmin
+        ? searchParams
+        : { ...searchParams, type: [DEFAULT_BILLING_LOG_TYPE_VALUE] },
+    [isAdmin, searchParams]
   )
   const { sensitiveVisible } = useUsageLogsContext()
 

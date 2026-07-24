@@ -323,12 +323,27 @@ jobs:
           PROD_HOST: ${{ vars.PROD_HOST }}
           PROD_DEPLOY_USER: ${{ vars.PROD_DEPLOY_USER }}
           PROD_APP_ROOT: ${{ vars.PROD_APP_ROOT }}
+          PAYMENT_RELEASE_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           ssh_args=(-i "$HOME/.ssh/meimei-api-deploy" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          remote_bundle=''
+          cleanup_payment_bundle() {
+            rm -f "$RUNNER_TEMP/wechat-pay/wechat-pay.env" \
+              "$RUNNER_TEMP/wechat-pay/merchant-private-key.pem" \
+              "$RUNNER_TEMP/wechat-pay/wechatpay-public-key.pem"
+            rmdir "$RUNNER_TEMP/wechat-pay" 2>/dev/null || true
+            if [[ -n "$remote_bundle" ]]; then
+              # shellcheck disable=SC2029
+              ssh "${ssh_args[@]}" "$PROD_DEPLOY_USER@$PROD_HOST" \
+                "if [ -d '$remote_bundle' ]; then find '$remote_bundle' -mindepth 1 -maxdepth 1 -type f -delete; rmdir '$remote_bundle'; fi" || true
+            fi
+          }
+          trap cleanup_payment_bundle EXIT
           # DigitalOcean Firewall attachment can take a short time to propagate.
           # Retry the first SSH connection instead of failing during that window.
           connected=false
-          for attempt in {1..24}; do
+          for _ in {1..24}; do
+            # shellcheck disable=SC2029
             if ssh "${ssh_args[@]}" -o ConnectTimeout=10 "$PROD_DEPLOY_USER@$PROD_HOST" "mkdir -p '$PROD_APP_ROOT'"; then
               connected=true
               break
@@ -344,14 +359,16 @@ jobs:
             "$PROD_DEPLOY_USER@$PROD_HOST:$PROD_APP_ROOT/"
           if [[ "${{ inputs.operation }}" == 'deploy' ]]; then
             remote_bundle="$PROD_APP_ROOT/.wechat-pay-$GITHUB_RUN_ID"
+            # shellcheck disable=SC2029
             ssh "${ssh_args[@]}" "$PROD_DEPLOY_USER@$PROD_HOST" \
               "install -m 700 -d '$remote_bundle'"
             scp "${ssh_args[@]}" "$RUNNER_TEMP/wechat-pay/wechat-pay.env" \
               "$RUNNER_TEMP/wechat-pay/merchant-private-key.pem" \
               "$RUNNER_TEMP/wechat-pay/wechatpay-public-key.pem" \
               "$PROD_DEPLOY_USER@$PROD_HOST:$remote_bundle/"
+            # shellcheck disable=SC2029
             ssh "${ssh_args[@]}" "$PROD_DEPLOY_USER@$PROD_HOST" \
-              "cd '$PROD_APP_ROOT' && chmod 700 ./install-wechat-pay.sh && ./install-wechat-pay.sh '$remote_bundle'"
+              "cd '$PROD_APP_ROOT' && chmod 700 ./install-wechat-pay.sh && ./install-wechat-pay.sh '$remote_bundle' '$PAYMENT_RELEASE_ID'"
           fi
       - name: Authenticate production host to DOCR
         env:
@@ -376,17 +393,19 @@ jobs:
           PROD_HOST: ${{ vars.PROD_HOST }}
           PROD_DEPLOY_USER: ${{ vars.PROD_DEPLOY_USER }}
           PROD_APP_ROOT: ${{ vars.PROD_APP_ROOT }}
+          PAYMENT_RELEASE_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           ssh_args=(-i "$HOME/.ssh/meimei-api-deploy" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
           if [[ "$OPERATION" == 'rollback' ]]; then
             remote_command="cd '$PROD_APP_ROOT' && APP_ROOT='$PROD_APP_ROOT' ./deploy.sh rollback"
           else
-            remote_command="cd '$PROD_APP_ROOT' && APP_ROOT='$PROD_APP_ROOT' ./deploy.sh deploy '$IMAGE_REF' '$TARGET_SHA'"
+            remote_command="cd '$PROD_APP_ROOT' && APP_ROOT='$PROD_APP_ROOT' ./deploy.sh deploy '$IMAGE_REF' '$TARGET_SHA' '$PAYMENT_RELEASE_ID'"
           fi
+          # shellcheck disable=SC2029
           ssh "${ssh_args[@]}" "$PROD_DEPLOY_USER@$PROD_HOST" "$remote_command"
       - name: Verify public readiness
         run: |
-          for attempt in {1..20}; do
+          for _ in {1..20}; do
             if curl --fail --silent --show-error --max-time 10 https://api.meimeiapi.com/healthz/ready >/dev/null; then
               exit 0
             fi

@@ -29,8 +29,15 @@ export function getPlanFormSchema(t: TFunction) {
     subtitle: z.string().optional(),
     price_amount: z.coerce.number().min(0, t('Please enter amount')),
     currency: z.enum(['CNY', 'USD', 'EUR']),
-    duration_unit: z.enum(['year', 'month', 'day', 'hour', 'custom']),
-    duration_value: z.coerce.number().min(1),
+    duration_unit: z.enum([
+      'year',
+      'month',
+      'day',
+      'hour',
+      'custom',
+      'permanent',
+    ]),
+    duration_value: z.coerce.number().min(0),
     custom_seconds: z.coerce.number().min(0).optional(),
     quota_reset_period: z.enum([
       'never',
@@ -61,8 +68,8 @@ export const PLAN_FORM_DEFAULTS: PlanFormValues = {
   subtitle: '',
   price_amount: 0,
   currency: 'CNY',
-  duration_unit: 'month',
-  duration_value: 1,
+  duration_unit: 'permanent',
+  duration_value: 0,
   custom_seconds: 0,
   quota_reset_period: 'never',
   quota_reset_custom_seconds: 0,
@@ -89,7 +96,7 @@ export function planToFormValues(plan: SubscriptionPlan): PlanFormValues {
         ? plan.currency
         : 'CNY',
     duration_unit: plan.duration_unit || 'month',
-    duration_value: Number(plan.duration_value || 1),
+    duration_value: Number(plan.duration_value ?? 1),
     custom_seconds: Number(plan.custom_seconds || 0),
     quota_reset_period: plan.quota_reset_period || 'never',
     quota_reset_custom_seconds: Number(plan.quota_reset_custom_seconds || 0),
@@ -113,8 +120,14 @@ export function formValuesToPlanPayload(values: PlanFormValues): PlanPayload {
       ...values,
       price_amount: Number(values.price_amount || 0),
       currency: values.currency,
-      duration_value: Number(values.duration_value || 0),
-      custom_seconds: Number(values.custom_seconds || 0),
+      duration_value:
+        values.duration_unit === 'permanent'
+          ? 0
+          : Number(values.duration_value || 0),
+      custom_seconds:
+        values.duration_unit === 'custom'
+          ? Number(values.custom_seconds || 0)
+          : 0,
       quota_reset_period: values.quota_reset_period || 'never',
       quota_reset_custom_seconds:
         values.quota_reset_period === 'custom'
