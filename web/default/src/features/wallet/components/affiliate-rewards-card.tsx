@@ -69,11 +69,11 @@ export function AffiliateRewardsCard({
   return (
     <Card data-card-hover='false' className='h-full gap-0 overflow-hidden py-0'>
       <CardHeader className='border-b p-3 !pb-3 sm:p-5 sm:!pb-5'>
-        <div className='flex items-center gap-2.5'>
+        <div className='flex min-w-0 items-center gap-2.5'>
           <IconBadge tone='success'>
             <Gift />
           </IconBadge>
-          <div>
+          <div className='min-w-0'>
             <h3 className='text-sm font-semibold sm:text-base'>
               {t('Referral Rewards')}
             </h3>
