@@ -38,6 +38,7 @@
 | 2026-07-24 | Personal dev 隔离环境 | `make personal-dev-up`；`make personal-dev-doctor`；远端 Compose/health 检查；本地前端 proxy smoke；DigitalOcean Firewall 与 SSH 路径检查 | 通过 | 标准本地 Compose 未改变；本地仅运行 default 前端；个人 VPS 独立运行 API/PostgreSQL/Valkey；与 `2049-agent` 的目录、Compose project、network、volume、端口和 Secret 隔离；公网 SSH 阻断，Tailscale SSH 正常 |
 | 2026-07-24 | 微信支付生产注入与人民币计费展示 | `bash -n`（安装/部署脚本）；`tsgo -b`；`npx tsx --test` 用量金额回归；变更文件 `oxlint`/`oxfmt --check`；`rsbuild build`；生产后台页面回读 | 通过 | workflow 注入微信 Variables/Secrets 并只读挂载 PEM；人民币金额回归 2/2；钱包/计费金额按 `¥` 1:1 展示；生产 `USDExchangeRate=1`；完整 workflow 仍需 PR CI 验证，真实微信预下单需部署后验证 |
 | 2026-07-24 | 永久套餐、日志审计与支付配置原子回滚 | `go test ./model ./controller ./setting`；`bun test src/features/usage-logs/lib/utils.test.ts`；`bun run typecheck`；`bun run build`；变更文件 `oxlint`/`oxfmt --check`；`actionlint`；`shellcheck`；`bash deploy/production/deployment-scripts_test.sh`；production Compose `config --quiet` | 通过 | 默认套餐和精确匹配的旧内置套餐迁移为真实永久订阅；普通用户固定消费日志、管理员保留全部类型筛选；镜像、环境文件和 PEM 版本共同回滚；完整 PR CI 与生产真实支付仍待远端验证 |
+| 2026-07-24 | CC Switch 客户端导入 | `bun test src/features/keys/lib/cc-switch.test.ts`；相关文件 `oxlint`、`oxfmt --check`；`git diff --check` | 通过 | 默认 Codex=`meimei-codex`，Claude=`meimei-claude`；深链不传模型参数；完整 typecheck/build 由 PR 干净 CI 环境复核 |
 | YYYY-MM-DD | Cloud/Relay contract | token + usage integration tests | 未跑 | 尚无企业合同实现 |
 | YYYY-MM-DD | WORK/CODE E2E | 真实授权模型渠道 | 未跑 | 发布门槛 |
 
