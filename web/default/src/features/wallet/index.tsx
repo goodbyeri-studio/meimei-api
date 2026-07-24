@@ -25,9 +25,9 @@ import { Button } from '@/components/ui/button'
 import { getSelf } from '@/lib/api'
 
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
+import { BalanceRechargeCard } from './components/balance-recharge-card'
 import { BillingHistoryDialog } from './components/dialogs/billing-history-dialog'
 import { TransferDialog } from './components/dialogs/transfer-dialog'
-import { SubscriptionPlansCard } from './components/subscription-plans-card'
 import { WalletStatsCard } from './components/wallet-stats-card'
 import { useAffiliate, useTopupInfo } from './hooks'
 import type { UserWalletData } from './types'
@@ -43,7 +43,7 @@ export function Wallet(props: WalletProps) {
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
   const [billingDialogOpen, setBillingDialogOpen] = useState(false)
 
-  const { topupInfo } = useTopupInfo()
+  const { topupInfo, presetAmounts, loading: topupInfoLoading } = useTopupInfo()
   const {
     affiliateLink,
     loading: affiliateLoading,
@@ -103,9 +103,11 @@ export function Wallet(props: WalletProps) {
           <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5'>
             <WalletStatsCard user={user} loading={userLoading} />
 
-            <SubscriptionPlansCard
+            <BalanceRechargeCard
               topupInfo={topupInfo}
-              onPurchaseSuccess={fetchUser}
+              presetAmounts={presetAmounts}
+              loading={topupInfoLoading}
+              onRechargeSuccess={fetchUser}
             />
 
             <AffiliateRewardsCard
