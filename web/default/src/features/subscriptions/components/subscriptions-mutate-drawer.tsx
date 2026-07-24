@@ -660,53 +660,54 @@ export function SubscriptionsMutateDrawer({
                   )}
                 />
 
-                {durationUnit === 'custom' ? (
-                  <FormField
-                    control={form.control}
-                    name='custom_seconds'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('Custom Seconds')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type='number'
-                            min={1}
-                            onChange={(e) =>
-                              field.onChange(
-                                Number.parseInt(e.target.value, 10) || 0
-                              )
-                            }
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                ) : (
-                  <FormField
-                    control={form.control}
-                    name='duration_value'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('Duration Value')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type='number'
-                            min={1}
-                            onChange={(e) =>
-                              field.onChange(
-                                Number.parseInt(e.target.value, 10) || 0
-                              )
-                            }
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
+                {durationUnit !== 'permanent' &&
+                  (durationUnit === 'custom' ? (
+                    <FormField
+                      control={form.control}
+                      name='custom_seconds'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('Custom Seconds')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type='number'
+                              min={1}
+                              onChange={(e) =>
+                                field.onChange(
+                                  Number.parseInt(e.target.value, 10) || 0
+                                )
+                              }
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ) : (
+                    <FormField
+                      control={form.control}
+                      name='duration_value'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('Duration Value')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type='number'
+                              min={1}
+                              onChange={(e) =>
+                                field.onChange(
+                                  Number.parseInt(e.target.value, 10) || 0
+                                )
+                              }
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ))}
               </div>
             </SideDrawerSection>
 

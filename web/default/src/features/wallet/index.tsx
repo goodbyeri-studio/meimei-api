@@ -105,7 +105,6 @@ export function Wallet(props: WalletProps) {
 
             <SubscriptionPlansCard
               topupInfo={topupInfo}
-              userQuota={user?.quota}
               onPurchaseSuccess={fetchUser}
             />
 

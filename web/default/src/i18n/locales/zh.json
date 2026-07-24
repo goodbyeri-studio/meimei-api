@@ -3355,6 +3355,7 @@
     "Period": "时间范围",
     "Periodically check for upstream model changes": "定期检查上游模型是否有变更",
     "Periodically send ping frames to keep streaming connections active.": "定期发送 ping 帧以保持流连接处于活动状态。",
+    "Permanent": "永久",
     "Permanently delete your account and all data": "永久删除您的帐户和所有数据",
     "Permit Passkey registration on non-HTTPS origins (only recommended for development)": "允许在非 HTTPS 源上注册通行密钥（仅建议用于开发）",
     "Perplexity": "Perplexity",

@@ -20,25 +20,11 @@ For commercial licensing, please contact support@quantumnous.com
  * Utility functions for usage logs feature
  */
 import {
-  getAllLogs,
-  getUserLogs,
-  getAllMidjourneyLogs,
-  getUserMidjourneyLogs,
-  getAllTaskLogs,
-  getUserTaskLogs,
-} from '../api'
-import {
   LOG_TYPES,
   DISPLAYABLE_LOG_TYPES,
   TIMING_LOG_TYPES,
 } from '../constants'
-import type {
-  GetLogsParams,
-  GetLogsResponse,
-  FetchLogsConfig,
-  GetMidjourneyLogsParams,
-  GetTaskLogsParams,
-} from '../types'
+import type { GetLogsParams } from '../types'
 
 // ============================================================================
 // Type Checkers & Utilities
@@ -247,58 +233,4 @@ export function buildApiParams(config: {
   }
 
   return params
-}
-
-// ============================================================================
-// Data Fetching
-// ============================================================================
-
-/**
- * Fetch logs based on category type
- */
-export async function fetchLogsByCategory(
-  config: FetchLogsConfig
-): Promise<GetLogsResponse> {
-  const { logCategory, isAdmin, page, pageSize, searchParams, columnFilters } =
-    config
-
-  if (logCategory === 'common') {
-    const params = buildApiParams({
-      page,
-      pageSize,
-      searchParams,
-      columnFilters,
-      isAdmin,
-    })
-    return isAdmin ? await getAllLogs(params) : await getUserLogs(params)
-  }
-
-  // For drawing and task logs
-  const baseParams = buildBaseParams({
-    page,
-    pageSize,
-    searchParams,
-    useMilliseconds: logCategory === 'drawing',
-  })
-
-  const paramsWithFilter = {
-    ...baseParams,
-    ...(logCategory === 'drawing'
-      ? { mj_id: searchParams.filter as string | undefined }
-      : {}),
-    ...(logCategory === 'task'
-      ? { task_id: searchParams.filter as string | undefined }
-      : {}),
-  }
-
-  if (logCategory === 'drawing') {
-    return isAdmin
-      ? await getAllMidjourneyLogs(paramsWithFilter as GetMidjourneyLogsParams)
-      : await getUserMidjourneyLogs(paramsWithFilter as GetMidjourneyLogsParams)
-  }
-
-  // task logs
-  return isAdmin
-    ? await getAllTaskLogs(paramsWithFilter as GetTaskLogsParams)
-    : await getUserTaskLogs(paramsWithFilter as GetTaskLogsParams)
 }
