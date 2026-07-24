@@ -5,7 +5,7 @@
 仓库保留两种互不替代的开发方式：
 
 1. **标准本地模式**：所有贡献者均可使用。PostgreSQL 与 Redis 在本地 Docker 中运行，Go 后端与 `web/default` 前端可在宿主机运行并保留热更新；也可以用现有 `Dockerfile.dev` 启动完整本地 API dev stack。
-2. **Personal dev 模式**：仅供拥有个人云端开发 VPS 的开发者选择。Go API、PostgreSQL 和 Valkey 在个人 VPS 的隔离 Compose project 中运行，本地 Docker 只运行 default 前端，通过 Tailscale SSH 同步源码和转发 API。
+2. **Personal dev Hybrid 模式**：仅供拥有个人云端开发 VPS 的 fpsmeimei 选择。Go API、PostgreSQL 和 Valkey 在个人 VPS 的隔离 Compose project 中运行；本地 Compose project 运行 default 前端和自动重连的受限 SSH tunnel。
 
 两种模式都不用于 staging、production 或对外售卖。Personal dev 是附加能力，不改变或废弃任何现有本地 Compose、Make target 和微信支付本地 override。
 
@@ -110,18 +110,22 @@ Personal dev 的实现位于 [`deploy/personal-dev/`](../../deploy/personal-dev/
 
 ```bash
 make personal-dev-init
+make personal-dev-tunnel-bootstrap
 make personal-dev-up
 ```
 
 默认职责边界：
 
-- 本地 OrbStack 只运行 `meimei-api-personal-web`，默认地址 `http://127.0.0.1:3002`。
+- 本地 OrbStack 将 `meimei-api-personal-web` 作为一个项目管理，内部包含 `web-dev` 与 `tunnel`，默认地址 `http://127.0.0.1:3002`。
 - 本地源码仍是唯一编辑源；前端通过 bind mount 热更新。
 - 当前 worktree 通过 Tailscale SSH 增量同步到 `/opt/dev/projects/meimei-api/source`。
 - VPS 使用 `meimei-api-fpsmeimei` Compose project 独立运行 API、PostgreSQL 和 Valkey。
-- 远端 API 只绑定 `127.0.0.1:3100`，本地通过 `127.0.0.1:3310` SSH tunnel 访问。
+- 远端 API 只绑定 `127.0.0.1:3100`，本地 tunnel 容器发布 `127.0.0.1:3310`。
+- tunnel 使用本机独立的受限 key、固定的 VPS host key、`autossh` 和 `restart: unless-stopped`；不挂载完整权限的管理 SSH key。
 - runtime env 保存在本地 `~/.config/goodbyeri/personal-dev/meimei-api.env` 和远端项目 runtime 目录，不进入仓库。
 
-Go 后端变化后运行 `make personal-dev-rebuild`；前端变化由本地开发服务器直接热更新。`make personal-dev-down` 只停止 personal dev containers 和 tunnel，不删除 volumes，也不会操作标准本地开发 stack。
+首次构建后，日常在 OrbStack 对 `meimei-api-personal-web` 项目级点击启动/停止即可同时管理前端和 tunnel。Go 后端变化后运行 `make personal-dev-rebuild`；前端变化由本地开发服务器直接热更新。OrbStack 停止本地项目不会停止 VPS backend；`make personal-dev-down` 则会停止本地与远端 personal dev containers，但不删除 volumes，也不会操作标准本地开发 stack。
+
+第二台 Windows 主机使用 WSL2 Ubuntu 与 Docker Desktop WSL integration，仓库放在 WSL 文件系统。每台电脑分别运行 `make personal-dev-tunnel-bootstrap` 生成自己的 tunnel key，不复制私钥；首次 `make personal-dev-web-up` 后改用 Docker Desktop 项目按钮。两台电脑可以同时运行本地前端，但不得同时同步或重建共享的 VPS source。完整步骤见 [`deploy/personal-dev/README.md`](../../deploy/personal-dev/README.md)。
 
 Personal dev 与同一 VPS 上的其他项目必须使用不同的目录、Compose project、network、volumes、数据库、缓存、端口和 Secret。个人 VPS 公网 SSH 必须由云 Firewall 阻断，管理连接只通过 Tailscale；PostgreSQL、Valkey 和开发 API 均不得直接暴露到公网。
