@@ -63,6 +63,15 @@ grep -qx 'WECHAT_PAY_MCH_ID=10001' "$SECRET_ROOT/releases/release-one/production
 [[ -s "$SECRET_ROOT/releases/release-one/merchant-private-key.pem" ]]
 first_hash=$(sha256sum "$SECRET_ROOT/releases/release-one/production.env" | cut -d' ' -f1)
 
+default_app_root="$TEST_ROOT/default-app"
+default_bundle=$(make_bundle default-rootless 10000)
+APP_ROOT="$default_app_root" WECHAT_PAY_ENV_FILE="$BASE_ENV" \
+  "$SCRIPT_DIR/install-wechat-pay.sh" "$default_bundle" default-rootless
+default_release="$default_app_root/.secrets/wechatpay/releases/default-rootless"
+[[ -s "$default_release/production.env" ]]
+[[ "$(stat -c '%a' "$default_app_root/.secrets/wechatpay")" == '700' ]]
+[[ "$(stat -c '%a' "$default_release/production.env")" == '600' ]]
+
 invalid_bundle=$(make_bundle broken-release 19999)
 printf 'invalid public key\n' > "$invalid_bundle/wechatpay-public-key.pem"
 if WECHAT_PAY_ENV_FILE="$BASE_ENV" WECHAT_PAY_SECRET_DIR="$SECRET_ROOT" \
