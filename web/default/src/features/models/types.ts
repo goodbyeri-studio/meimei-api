@@ -43,6 +43,10 @@ export interface Model {
   endpoints?: string
   status: number
   sync_official: number
+  catalog_only: boolean
+  catalog_source?: string
+  upstream_available: boolean
+  publish_override: number
   created_time: number
   updated_time: number
   name_rule: number

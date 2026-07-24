@@ -1,5 +1,6 @@
 # Backend-only build for frontend development
-# Skips frontend build, uses a placeholder for //go:embed web/dist
+# Skips frontend build, uses placeholders for the SPA entrypoints while
+# preserving the static documentation served by the backend.
 
 FROM golang:1.26.1-alpine AS builder
 
@@ -17,6 +18,7 @@ RUN go mod download
 COPY . .
 
 RUN mkdir -p web/default/dist web/classic/dist && \
+    cp -R web/default/public/docs web/default/dist/docs && \
     echo '<!doctype html><html><head><title>dev</title></head><body>use frontend dev server</body></html>' > web/default/dist/index.html && \
     echo '<!doctype html><html><head><title>dev</title></head><body>use frontend dev server</body></html>' > web/classic/dist/index.html
 

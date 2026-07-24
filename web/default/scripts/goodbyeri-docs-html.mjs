@@ -21,14 +21,16 @@ const existingCspPattern =
 
 export function replaceCustomerFacingBrand(content) {
   return content
-    .replaceAll('https://doc.deepkey.top', 'https://goodbyeri.cc/docs')
-    .replaceAll('http://doc.deepkey.top', 'https://goodbyeri.cc/docs')
-    .replaceAll('https://deepkey.top', 'https://goodbyeri.cc')
-    .replaceAll('http://deepkey.top', 'https://goodbyeri.cc')
-    .replaceAll('doc.deepkey.top', 'goodbyeri.cc/docs')
-    .replaceAll('deepkey.top', 'goodbyeri.cc')
-    .replaceAll('DeepKey', 'Goodbyeri')
-    .replaceAll('deepkey', 'goodbyeri.cc')
+    .replaceAll(/https?:\/\/goodbyeri\.cc/gi, 'https://meimeiapi.com')
+    .replaceAll(/goodbyeri\.cc/gi, 'meimeiapi.com')
+    .replaceAll('https://doc.deepkey.top', 'https://meimeiapi.com/docs')
+    .replaceAll('http://doc.deepkey.top', 'https://meimeiapi.com/docs')
+    .replaceAll('https://deepkey.top', 'https://meimeiapi.com')
+    .replaceAll('http://deepkey.top', 'https://meimeiapi.com')
+    .replaceAll('doc.deepkey.top', 'meimeiapi.com/docs')
+    .replaceAll('deepkey.top', 'meimeiapi.com')
+    .replaceAll('DeepKey', '莓莓 API')
+    .replaceAll('deepkey', 'meimeiapi.com')
     .replaceAll(/[ \t]+$/gm, '')
 }
 
@@ -63,16 +65,16 @@ export function addCsp(content, policy) {
   )
 }
 
-export function prepareIndexHtml(content, policy) {
+export function prepareIndexHtml(content, policy, version = '') {
   const viewerPattern =
     /<iframe\b(?=[^>]*\bid=["']viewer["'])[^>]*>[\s\S]*?<\/iframe\s*>/i
   if (!viewerPattern.test(content)) {
     throw new Error('Documentation index is missing the viewer iframe')
   }
 
-  const viewerPlaceholder = '<!-- goodbyeri-docs-viewer -->'
-  const safeViewer =
-    '<iframe id="viewer" title="文档内容" src="articles/guide-intro.html" sandbox="allow-popups allow-popups-to-escape-sandbox"></iframe>'
+  const viewerPlaceholder = '<!-- meimeiapi-docs-viewer -->'
+  const versionQuery = version ? `?v=${version}` : ''
+  const safeViewer = `<iframe id="viewer" title="文档内容" src="articles/guide-intro.html${versionQuery}" sandbox="allow-popups allow-popups-to-escape-sandbox"></iframe>`
   const sanitized = replaceCustomerFacingBrand(
     stripRemoteActiveContent(content.replace(viewerPattern, viewerPlaceholder))
   ).replace(viewerPlaceholder, safeViewer)
@@ -81,20 +83,34 @@ export function prepareIndexHtml(content, policy) {
     throw new Error('Documentation index is missing the body closing tag')
   }
 
+  const versioned = version
+    ? sanitized.replaceAll(
+        /((?:href|src)=["'](?:style\.css|app\.js))(["'])/g,
+        `$1${versionQuery}$2`
+      )
+    : sanitized
+
   return addCsp(
-    sanitized.replace(
+    versioned.replace(
       /<\/body\s*>/i,
-      '  <script src="app.js" defer></script>\n</body>'
+      `  <script src="app.js${versionQuery}" defer></script>\n</body>`
     ),
     policy
   )
 }
 
-export function prepareArticleHtml(content, policy) {
+export function prepareArticleHtml(content, policy, version = '') {
+  const versionQuery = version ? `?v=${version}` : ''
   const sanitized = replaceCustomerFacingBrand(
     stripRemoteActiveContent(content)
   )
     .replaceAll(/<source\b[^>]*\/?\s*>/gi, '')
     .replaceAll(/((?:src|href)=["'])\/images\//gi, '$1../images/')
-  return addCsp(sanitized, policy)
+  const versioned = version
+    ? sanitized.replaceAll(
+        /((?:src|href)=["'])(\.\.\/(?:article\.css|images\/[^"'?]+))(["'])/g,
+        `$1$2${versionQuery}$3`
+      )
+    : sanitized
+  return addCsp(versioned, policy)
 }

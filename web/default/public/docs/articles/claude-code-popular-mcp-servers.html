@@ -4,13 +4,13 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' https: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>常用 MCP 服务器推荐 - goodbyeri.cc 文档</title>
-  <link rel="stylesheet" href="../article.css">
+  <title>常用 MCP 服务器推荐 - meimeiapi.com 文档</title>
+  <link rel="stylesheet" href="../article.css?v=b35b88632305">
 </head>
 <body class="article-body">
   <article class="doc">
     <h1 class="doc-title">常用 MCP 服务器推荐</h1>
-<p><img alt="Claude Code MCP 服务器推荐" loading="lazy" src="../images/claude-code-mcp-servers.png"/></p><p>MCP (Model Context Protocol) 是 Anthropic 推出的开源协议，通过添加 MCP 服务器可以大幅扩展 Claude Code 的功能。本文精选了最受欢迎和最实用的 MCP 服务器，帮助你快速提升开发效率。</p><h2 id="我的常用配置" tabindex="-1">我的常用配置： </h2><p>配置写到 ~/.claude.json 最下面的 mcpServers 那部分</p><pre><code class="language-json">"mcpServers": {
+<p><img alt="Claude Code MCP 服务器推荐" loading="lazy" src="../images/claude-code-mcp-servers.png?v=b35b88632305"/></p><p>MCP (Model Context Protocol) 是 Anthropic 推出的开源协议，通过添加 MCP 服务器可以大幅扩展 Claude Code 的功能。本文精选了最受欢迎和最实用的 MCP 服务器，帮助你快速提升开发效率。</p><h2 id="我的常用配置" tabindex="-1">我的常用配置： </h2><p>配置写到 ~/.claude.json 最下面的 mcpServers 那部分</p><pre><code class="language-json">"mcpServers": {
     "browser-tools-mcp": {
       "type": "stdio",
       "command": "npx",
@@ -201,7 +201,7 @@ claude mcp list
 echo "测试文件系统访问..."
 claude "列出当前目录的文件"</code></pre><hr/><h2 id="🎉-总结" tabindex="-1">🎉 总结 </h2><p>MCP 服务器是 Claude Code 的强大扩展机制，通过合理使用可以：</p><ul><li>✅ <strong>10倍提升效率</strong> - 自动化重复性任务</li><li>✅ <strong>扩展能力边界</strong> - 集成各种工具和服务</li><li>✅ <strong>定制化体验</strong> - 根据需求自由组合</li><li>✅ <strong>持续进化</strong> - 社区不断贡献新的 MCP</li></ul><p>推荐新手从 <strong>Filesystem</strong> 和 <strong>Memory</strong> 开始，逐步探索其他 MCP 服务器的强大功能。</p>
     <footer class="doc-footer">
-      <p>本文由 <a href="https://goodbyeri.cc" target="_blank" rel="noopener">goodbyeri.cc</a> 文档库整理校订。接入方式:将 <code>ANTHROPIC_BASE_URL</code> 设为 <code>https://goodbyeri.cc</code>,密钥使用 goodbyeri.cc 控制台创建的 API Key。</p>
+      <p>本文由 <a href="https://meimeiapi.com" target="_blank" rel="noopener">meimeiapi.com</a> 文档库整理校订。接入方式:将 <code>ANTHROPIC_BASE_URL</code> 设为 <code>https://meimeiapi.com</code>,密钥使用 meimeiapi.com 控制台创建的 API Key。</p>
     </footer>
   </article>
 </body>

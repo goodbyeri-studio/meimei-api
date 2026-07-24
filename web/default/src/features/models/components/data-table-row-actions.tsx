@@ -65,7 +65,12 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
     handleToggleModelStatus(model.id, model.status, queryClient)
   }
 
-  const toggleLabel = isEnabled ? t('Disable') : t('Enable')
+  let toggleLabel = isEnabled ? t('Disable') : t('Enable')
+  if (model.catalog_only) {
+    toggleLabel = isEnabled ? t('Unpublish') : t('Publish')
+  }
+  const publishBlocked =
+    model.catalog_only && !model.upstream_available && !isEnabled
 
   return (
     <div className='-ml-1.5 flex items-center gap-1'>
@@ -93,6 +98,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
               size='icon-sm'
               onClick={handleToggleStatus}
               aria-label={toggleLabel}
+              disabled={publishBlocked}
               className={
                 isEnabled
                   ? 'text-destructive hover:text-destructive'
@@ -103,7 +109,9 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         >
           {isEnabled ? <PowerOff /> : <Power />}
         </TooltipTrigger>
-        <TooltipContent>{toggleLabel}</TooltipContent>
+        <TooltipContent>
+          {publishBlocked ? t('Unavailable upstream') : toggleLabel}
+        </TooltipContent>
       </Tooltip>
 
       <DataTableRowActionMenu ariaLabel={t('Open menu')}>

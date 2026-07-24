@@ -4,8 +4,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' https: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vibe Coding 终极工作流 - goodbyeri.cc 文档</title>
-  <link rel="stylesheet" href="../article.css">
+  <title>Vibe Coding 终极工作流 - meimeiapi.com 文档</title>
+  <link rel="stylesheet" href="../article.css?v=b35b88632305">
 </head>
 <body class="article-body">
   <article class="doc">
@@ -20,7 +20,7 @@
  - 完整的问题解决工作流</code></pre><h3 id="claude-code-管理" tabindex="-1">Claude Code 管理 </h3><pre><code>**/cc:create-command [name] [description]**
  - 创建新的 Claude Code 命令</code></pre><h2 id="如何使用" tabindex="-1">如何使用 </h2><h3 id="快速安装" tabindex="-1">快速安装 </h3><pre><code># 备份原有配置mv ~/.claude ~/.claude.bak# 克隆配置仓库git clone https://github.com/feiskyer/claude-code-settings.git ~/.claude# 安装 GitHub Copilot API 代理npm install -g copilot-api# 授权你的 GitHub Copilot 账户copilot-api auth# 建议在后台运行（使用 tmux）tmux new-session -d -s copilot 'copilot-api start'</code></pre><h3 id="特别说明" tabindex="-1">特别说明 </h3><p>这套配置使用 <strong>GitHub Copilot</strong><br/>  作为 Claude Code 的模型提供者，通过 copilot-api 代理实现。这样做成本低、速度快且无需注册和订阅 Claude 账户。如果你使用其他配置，可以适当调整甚至删除 settings.json 文件。</p><h2 id="使用示例" tabindex="-1">使用示例 </h2><h3 id="功能开发" tabindex="-1">功能开发 </h3><p>假设我们要开发一个用户认证功能，可以这么使用：</p><pre><code># 第一步：定义需求/kiro:spec 用户认证系统# 第二步：设计架构/kiro:design 用户认证系统# 第三步：拆解任务/kiro:task 用户认证系统# 第四步：逐个执行/kiro:execute 用户认证系统 实现用户注册接口</code></pre><p>每一步都会产生详细的文档和代码，而且前后一致，逻辑清晰。实际上，如果你一直保持在 /kiro:spec<br/>  开始的会话中没有退出，后面几个命令都不需要你主动执行，Claude 会自动提示你要不要进入下一步的流程。</p><h3 id="代码审核" tabindex="-1">代码审核 </h3><p>Github 项目的 PR 审核，可以这么使用：</p><pre><code>/gh:review-pr 123</code></pre><p>Claude Code 会自动拉取 PR 内容，进行全面分析，给出具体的改进建议，并在发布 PR 审核意见前征求你的意见（同意或者要求修改）。</p><h2 id="写在最后" tabindex="-1">写在最后 </h2><p>这套配置还在持续演进中，未来还会增加更多 Vibe Coding 实践技巧。如果你有什么好的建议，也欢迎随时提 PR 改进或者提 Issue 讨论。</p><p><strong>项目地址</strong> ：<br/><a href="https://github.com/feiskyer/claude-code-settings" rel="noopener" target="_blank">https://github.com/feiskyer/claude-code-settings</a></p>
     <footer class="doc-footer">
-      <p>本文由 <a href="https://goodbyeri.cc" target="_blank" rel="noopener">goodbyeri.cc</a> 文档库整理校订。接入方式:将 <code>ANTHROPIC_BASE_URL</code> 设为 <code>https://goodbyeri.cc</code>,密钥使用 goodbyeri.cc 控制台创建的 API Key。</p>
+      <p>本文由 <a href="https://meimeiapi.com" target="_blank" rel="noopener">meimeiapi.com</a> 文档库整理校订。接入方式:将 <code>ANTHROPIC_BASE_URL</code> 设为 <code>https://meimeiapi.com</code>,密钥使用 meimeiapi.com 控制台创建的 API Key。</p>
     </footer>
   </article>
 </body>

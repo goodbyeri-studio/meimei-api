@@ -66,7 +66,6 @@ import {
   handleTestChannel,
   handleToggleChannelStatus,
   isChannelEnabled,
-  isMultiKeyChannel,
 } from '../lib'
 import { parseUpstreamUpdateMeta } from '../lib/upstream-update-utils'
 import type { Channel } from '../types'
@@ -87,7 +86,6 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const [isTogglingStatus, setIsTogglingStatus] = useState(false)
 
   const isEnabled = isChannelEnabled(channel)
-  const isMultiKey = isMultiKeyChannel(channel)
   const canEditSensitive = hasPermission(
     currentUser,
     ADMIN_PERMISSION_RESOURCES.CHANNEL,
@@ -318,15 +316,12 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
             </DropdownMenuItem>
           )}
 
-          {/* Manage Keys (only for multi-key channels) */}
-          {isMultiKey && (
-            <DropdownMenuItem onClick={handleManageKeys}>
-              {t('Manage Keys')}
-              <DropdownMenuShortcut>
-                <Key size={16} />
-              </DropdownMenuShortcut>
-            </DropdownMenuItem>
-          )}
+          <DropdownMenuItem onClick={handleManageKeys}>
+            {t('Manage Keys')}
+            <DropdownMenuShortcut>
+              <Key size={16} />
+            </DropdownMenuShortcut>
+          </DropdownMenuItem>
 
           <DropdownMenuSeparator />
 

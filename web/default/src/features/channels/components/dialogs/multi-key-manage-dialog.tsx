@@ -17,7 +17,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQueryClient } from '@tanstack/react-query'
-import { Loader2, RefreshCw, Trash2, Power, PowerOff } from 'lucide-react'
+import {
+  KeyRound,
+  Loader2,
+  Plus,
+  Power,
+  PowerOff,
+  RefreshCw,
+  Trash2,
+} from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -36,6 +44,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { Textarea } from '@/components/ui/textarea'
 import {
   ADMIN_PERMISSION_ACTIONS,
   ADMIN_PERMISSION_RESOURCES,
@@ -51,6 +60,8 @@ import {
   enableAllMultiKeys,
   disableAllMultiKeys,
   deleteDisabledMultiKeys,
+  appendMultiKeys,
+  replaceMultiKey,
 } from '../../api'
 import { MULTI_KEY_FILTER_OPTIONS } from '../../constants'
 import {
@@ -100,6 +111,11 @@ export function MultiKeyManageDialog({
   const [confirmAction, setConfirmAction] =
     useState<MultiKeyConfirmAction | null>(null)
   const [isPerformingAction, setIsPerformingAction] = useState(false)
+  const [keyEditor, setKeyEditor] = useState<{
+    mode: 'append' | 'replace'
+    keyIndex?: number
+  } | null>(null)
+  const [keyEditorValue, setKeyEditorValue] = useState('')
 
   // Reset and load data when dialog opens
   useEffect(() => {
@@ -149,7 +165,7 @@ export function MultiKeyManageDialog({
   }
 
   const handleStatusFilterChange = (value: string) => {
-    const newFilter = value === 'all' ? null : parseInt(value)
+    const newFilter = value === 'all' ? null : Number.parseInt(value)
     setStatusFilter(newFilter)
     setCurrentPage(1)
     loadKeyStatus(1, pageSize, newFilter)
@@ -228,12 +244,60 @@ export function MultiKeyManageDialog({
     )
   }
 
+  const saveKeyEditor = async () => {
+    if (!currentRow || !keyEditor) return
+    const values = keyEditorValue
+      .split(/\r?\n/)
+      .map((value) => value.trim())
+      .filter(Boolean)
+    if (values.length === 0) return
+    setIsPerformingAction(true)
+    try {
+      const response =
+        keyEditor.mode === 'append'
+          ? await appendMultiKeys(currentRow.id, values)
+          : await replaceMultiKey(
+              currentRow.id,
+              keyEditor.keyIndex ?? -1,
+              values[0]
+            )
+      if (!response.success) {
+        toast.error(response.message || t('Operation failed'))
+        return
+      }
+      toast.success(response.message || t('Operation successful'))
+      setKeyEditor(null)
+      setKeyEditorValue('')
+      queryClient.invalidateQueries({ queryKey: channelsQueryKeys.lists() })
+      loadKeyStatus(1, pageSize)
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error ? error.message : t('Operation failed')
+      )
+    } finally {
+      setIsPerformingAction(false)
+    }
+  }
+
   const formatKeyTimestamp = (timestamp?: number) => {
     if (!timestamp) return '-'
     return formatTimestamp(timestamp)
   }
 
   if (!currentRow) return null
+
+  const isMultiKey = currentRow.channel_info?.is_multi_key === true
+  let supportsKeyAppend = currentRow.type !== 57
+  if (currentRow.type === 41) {
+    try {
+      const settings = JSON.parse(currentRow.settings) as {
+        vertex_key_type?: string
+      }
+      supportsKeyAppend = settings.vertex_key_type !== 'api_key'
+    } catch {
+      supportsKeyAppend = false
+    }
+  }
 
   return (
     <>
@@ -294,12 +358,10 @@ export function MultiKeyManageDialog({
           {/* Toolbar */}
           <div className='flex shrink-0 items-center justify-between'>
             <Select
-              items={[
-                ...MULTI_KEY_FILTER_OPTIONS.map((option) => ({
-                  value: option.value,
-                  label: t(option.label),
-                })),
-              ]}
+              items={MULTI_KEY_FILTER_OPTIONS.map((option) => ({
+                value: option.value,
+                label: t(option.label),
+              }))}
               value={statusFilter === null ? 'all' : statusFilter.toString()}
               onValueChange={(v) => v !== null && handleStatusFilterChange(v)}
             >
@@ -321,13 +383,25 @@ export function MultiKeyManageDialog({
               <Button
                 variant='outline'
                 size='sm'
+                disabled={!canEditSensitive || !supportsKeyAppend}
+                onClick={() => {
+                  setKeyEditor({ mode: 'append' })
+                  setKeyEditorValue('')
+                }}
+              >
+                <Plus />
+                {t('Add keys')}
+              </Button>
+              <Button
+                variant='outline'
+                size='sm'
                 onClick={() => loadKeyStatus()}
                 disabled={isLoading}
               >
                 <RefreshCw className='h-4 w-4' />
               </Button>
 
-              {manualDisabledCount + autoDisabledCount > 0 && (
+              {isMultiKey && manualDisabledCount + autoDisabledCount > 0 && (
                 <Button
                   variant='default'
                   size='sm'
@@ -338,7 +412,7 @@ export function MultiKeyManageDialog({
                 </Button>
               )}
 
-              {enabledCount > 0 && (
+              {isMultiKey && enabledCount > 0 && (
                 <Button
                   variant='destructive'
                   size='sm'
@@ -349,7 +423,7 @@ export function MultiKeyManageDialog({
                 </Button>
               )}
 
-              {autoDisabledCount > 0 && (
+              {isMultiKey && autoDisabledCount > 0 && (
                 <Button
                   variant='destructive'
                   size='sm'
@@ -378,15 +452,17 @@ export function MultiKeyManageDialog({
 
           {/* Table */}
           <div className='min-h-0 flex-1 overflow-auto rounded-md border'>
-            {isLoading ? (
+            {isLoading && (
               <div className='flex items-center justify-center py-12'>
                 <Loader2 className='text-muted-foreground h-8 w-8 animate-spin' />
               </div>
-            ) : keys.length === 0 ? (
+            )}
+            {!isLoading && keys.length === 0 && (
               <div className='text-muted-foreground py-12 text-center'>
                 {t('No keys found')}
               </div>
-            ) : (
+            )}
+            {!isLoading && keys.length > 0 && (
               <StaticDataTable
                 className='rounded-none border-0'
                 tableClassName='min-w-[800px]'
@@ -407,6 +483,21 @@ export function MultiKeyManageDialog({
                     cell: (key) => renderStatusBadge(key.status),
                   },
                   {
+                    id: 'key',
+                    header: t('Key'),
+                    className: 'min-w-52',
+                    cell: (key) => (
+                      <div>
+                        <div className='font-mono text-xs'>
+                          {key.key_preview || '-'}
+                        </div>
+                        <div className='text-muted-foreground font-mono text-xs'>
+                          {key.fingerprint || t('Not used yet')}
+                        </div>
+                      </div>
+                    ),
+                  },
+                  {
                     id: 'reason',
                     header: t('Disabled Reason'),
                     className: 'min-w-[200px]',
@@ -421,6 +512,13 @@ export function MultiKeyManageDialog({
                     cell: (key) => formatKeyTimestamp(key.disabled_time),
                   },
                   {
+                    id: 'last-used-at',
+                    header: t('Last used'),
+                    className: 'w-44',
+                    cellClassName: 'text-muted-foreground text-sm',
+                    cell: (key) => formatKeyTimestamp(key.last_used_at),
+                  },
+                  {
                     id: 'actions',
                     header: t('Actions'),
                     className: 'text-right',
@@ -429,7 +527,12 @@ export function MultiKeyManageDialog({
                         keyIndex={key.index}
                         status={key.status}
                         canDelete={canEditSensitive}
+                        isMultiKey={isMultiKey}
                         onAction={setConfirmAction}
+                        onRotate={(keyIndex) => {
+                          setKeyEditor({ mode: 'replace', keyIndex })
+                          setKeyEditorValue('')
+                        }}
                       />
                     ),
                   },
@@ -480,6 +583,52 @@ export function MultiKeyManageDialog({
         isLoading={isPerformingAction}
         handleConfirm={performAction}
       />
+
+      <Dialog
+        open={keyEditor !== null}
+        onOpenChange={(editorOpen) => !editorOpen && setKeyEditor(null)}
+        title={keyEditor?.mode === 'append' ? t('Add keys') : t('Rotate key')}
+        description={
+          keyEditor?.mode === 'append'
+            ? t('Enter one upstream key per line. Duplicate keys are ignored.')
+            : t(
+                'The old key is replaced immediately and the new key is enabled.'
+              )
+        }
+        footer={
+          <>
+            <Button
+              variant='outline'
+              disabled={isPerformingAction}
+              onClick={() => setKeyEditor(null)}
+            >
+              {t('Cancel')}
+            </Button>
+            <Button
+              disabled={!keyEditorValue.trim() || isPerformingAction}
+              onClick={saveKeyEditor}
+            >
+              {isPerformingAction ? (
+                <Loader2 className='animate-spin' />
+              ) : (
+                <KeyRound />
+              )}
+              {t('Save')}
+            </Button>
+          </>
+        }
+      >
+        <Textarea
+          value={keyEditorValue}
+          rows={8}
+          placeholder={
+            keyEditor?.mode === 'append'
+              ? t('One key per line')
+              : t('New upstream key')
+          }
+          onChange={(event) => setKeyEditorValue(event.target.value)}
+        />
+      </Dialog>
     </>
   )
 }

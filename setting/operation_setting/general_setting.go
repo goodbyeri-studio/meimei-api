@@ -8,7 +8,7 @@ const (
 	QuotaDisplayTypeCNY    = "CNY"
 	QuotaDisplayTypeTokens = "TOKENS"
 	QuotaDisplayTypeCustom = "CUSTOM"
-	DefaultDocsLink        = "https://goodbyeri.cc/docs/"
+	DefaultDocsLink        = "/docs"
 )
 
 type GeneralSetting struct {

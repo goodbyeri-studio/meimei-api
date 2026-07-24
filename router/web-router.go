@@ -25,10 +25,15 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 	defaultFS := common.EmbedFolder(assets.DefaultBuildFS, "web/default/dist")
 	classicFS := common.EmbedFolder(assets.ClassicBuildFS, "web/classic/dist")
 	themeFS := common.NewThemeAwareFS(defaultFS, classicFS)
+	docsIndexPage, err := assets.DefaultBuildFS.ReadFile("web/default/dist/docs/index.html")
+	if err != nil {
+		panic("failed to load embedded documentation index: " + err.Error())
+	}
 
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
 	router.Use(middleware.GlobalWebRateLimit())
 	router.Use(middleware.Cache())
+	registerDocsIndexRoutes(router, docsIndexPage)
 	router.Use(static.Serve("/", themeFS))
 	router.NoRoute(func(c *gin.Context) {
 		c.Set(middleware.RouteTagKey, "web")
@@ -43,4 +48,14 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 			c.Data(http.StatusOK, "text/html; charset=utf-8", assets.DefaultIndexPage)
 		}
 	})
+}
+
+func registerDocsIndexRoutes(router *gin.Engine, docsIndexPage []byte) {
+	serveDocsIndex := func(c *gin.Context) {
+		c.Header("Cache-Control", "no-cache")
+		c.Data(http.StatusOK, "text/html; charset=utf-8", docsIndexPage)
+	}
+
+	router.GET("/docs", serveDocsIndex)
+	router.GET("/docs/", serveDocsIndex)
 }
