@@ -59,6 +59,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import dayjs from '@/lib/dayjs'
 
@@ -72,6 +73,7 @@ type Announcement = {
   publishDate: string
   type: 'default' | 'ongoing' | 'success' | 'warning' | 'error'
   extra?: string
+  published: boolean
 }
 
 type AnnouncementsSectionProps = {
@@ -90,6 +92,7 @@ const announcementSchema = z.object({
     .string()
     .max(100, 'Extra must be less than 100 characters')
     .optional(),
+  published: z.boolean(),
 })
 
 type AnnouncementFormValues = z.infer<typeof announcementSchema>
@@ -99,31 +102,31 @@ const ANNOUNCEMENT_FORM_ID = 'announcement-form'
 const typeOptions = [
   {
     value: 'default',
-    label: 'Default',
+    label: 'Other',
     color: 'bg-gray-500',
     badgeVariant: 'neutral' as const,
   },
   {
     value: 'ongoing',
-    label: 'Ongoing',
+    label: 'Ratio adjusted',
     color: 'bg-blue-500',
     badgeVariant: 'info' as const,
   },
   {
     value: 'success',
-    label: 'Success',
+    label: 'Model listed',
     color: 'bg-green-500',
     badgeVariant: 'success' as const,
   },
   {
     value: 'warning',
-    label: 'Warning',
+    label: 'Service change',
     color: 'bg-orange-500',
     badgeVariant: 'warning' as const,
   },
   {
     value: 'error',
-    label: 'Error',
+    label: 'Model removed',
     color: 'bg-red-500',
     badgeVariant: 'danger' as const,
   },
@@ -152,6 +155,7 @@ export function AnnouncementsSection({
       publishDate: new Date().toISOString(),
       type: 'default',
       extra: '',
+      published: true,
     },
   })
 
@@ -163,6 +167,8 @@ export function AnnouncementsSection({
           parsed.map((item, idx) => ({
             ...item,
             id: item.id || idx + 1,
+            published:
+              typeof item.published === 'boolean' ? item.published : true,
           }))
         )
       }
@@ -195,6 +201,7 @@ export function AnnouncementsSection({
       publishDate: new Date().toISOString(),
       type: 'default',
       extra: '',
+      published: true,
     })
     setShowDialog(true)
   }
@@ -206,6 +213,7 @@ export function AnnouncementsSection({
       publishDate: announcement.publishDate,
       type: announcement.type,
       extra: announcement.extra || '',
+      published: announcement.published,
     })
     setShowDialog(true)
   }
@@ -231,7 +239,7 @@ export function AnnouncementsSection({
         prev.filter((item) => item.id !== editingAnnouncement.id)
       )
       setHasChanges(true)
-      toast.success(t('Announcement deleted. Click "Save Settings" to apply.'))
+      toast.success(t('Timeline entry deleted. Save changes to apply.'))
     } else if (deleteTarget === 'batch') {
       setAnnouncements((prev) =>
         prev.filter((item) => !selectedIds.includes(item.id))
@@ -239,7 +247,7 @@ export function AnnouncementsSection({
       setSelectedIds([])
       setHasChanges(true)
       toast.success(
-        t('{{count}} announcements deleted. Click "Save Settings" to apply.', {
+        t('{{count}} timeline entries deleted. Save changes to apply.', {
           count: selectedIds.length,
         })
       )
@@ -255,11 +263,11 @@ export function AnnouncementsSection({
           item.id === editingAnnouncement.id ? { ...item, ...values } : item
         )
       )
-      toast.success(t('Announcement updated. Click "Save Settings" to apply.'))
+      toast.success(t('Timeline entry updated. Save changes to apply.'))
     } else {
       const newId = Math.max(...announcements.map((item) => item.id), 0) + 1
       setAnnouncements((prev) => [...prev, { id: newId, ...values }])
-      toast.success(t('Announcement added. Click "Save Settings" to apply.'))
+      toast.success(t('Timeline entry added. Save changes to apply.'))
     }
     setHasChanges(true)
     setShowDialog(false)
@@ -272,9 +280,9 @@ export function AnnouncementsSection({
         value: JSON.stringify(announcements),
       })
       setHasChanges(false)
-      toast.success(t('Announcements saved successfully'))
+      toast.success(t('Timeline saved successfully'))
     } catch {
-      toast.error(t('Failed to save announcements'))
+      toast.error(t('Failed to save timeline'))
     }
   }
 
@@ -286,6 +294,15 @@ export function AnnouncementsSection({
     setSelectedIds((prev) =>
       checked ? [...prev, id] : prev.filter((item) => item !== id)
     )
+  }
+
+  const togglePublished = (id: number, checked: boolean) => {
+    setAnnouncements((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, published: checked } : item
+      )
+    )
+    setHasChanges(true)
   }
 
   const sortedAnnouncements = useMemo(() => {
@@ -304,19 +321,25 @@ export function AnnouncementsSection({
     const diffHours = Math.floor(diffMins / 60)
     const diffDays = Math.floor(diffHours / 24)
 
-    if (diffMins < 60) return `${diffMins}m ago`
-    if (diffHours < 24) return `${diffHours}h ago`
-    return `${diffDays}d ago`
+    if (diffMs < 0) return dayjs(date).format('YYYY-MM-DD HH:mm')
+    if (diffMins < 1) return t('Just now')
+    if (diffMins < 60) {
+      return t('{{count}} minutes ago', { count: diffMins })
+    }
+    if (diffHours < 24) {
+      return t('{{count}} hours ago', { count: diffHours })
+    }
+    return t('{{count}} days ago', { count: diffDays })
   }
 
   return (
-    <SettingsSection title={t('Announcements')}>
+    <SettingsSection title={t('Timeline Management')}>
       <div className='space-y-4'>
         <div className='flex flex-wrap items-center justify-between gap-2'>
           <div className='flex flex-wrap items-center gap-2'>
             <Button onClick={handleAdd} size='sm'>
-              <Plus className='mr-2 h-4 w-4' />
-              {t('Add Announcement')}
+              <Plus data-icon='inline-start' />
+              {t('Add Timeline Entry')}
             </Button>
             <Button
               onClick={handleBatchDelete}
@@ -324,7 +347,7 @@ export function AnnouncementsSection({
               variant='destructive'
               disabled={selectedIds.length === 0}
             >
-              <Trash2 className='mr-2 h-4 w-4' />
+              <Trash2 data-icon='inline-start' />
               {t('Delete (')}
               {selectedIds.length})
             </Button>
@@ -334,14 +357,14 @@ export function AnnouncementsSection({
               variant='secondary'
               disabled={!hasChanges || updateOption.isPending}
             >
-              <Save className='mr-2 h-4 w-4' />
-              {updateOption.isPending ? t('Saving...') : t('Save Settings')}
+              <Save data-icon='inline-start' />
+              {updateOption.isPending ? t('Saving...') : t('Save Changes')}
             </Button>
           </div>
           <SettingsSwitchField
             checked={isEnabled}
             onCheckedChange={handleToggleEnabled}
-            label={t('Enabled')}
+            label={t('Timeline enabled')}
             className='py-0'
           />
         </div>
@@ -349,9 +372,7 @@ export function AnnouncementsSection({
         <StaticDataTable
           data={sortedAnnouncements}
           getRowKey={(announcement) => announcement.id}
-          emptyContent={t(
-            'No announcements yet. Click "Add Announcement" to create one.'
-          )}
+          emptyContent={t('No timeline entries yet.')}
           columns={[
             {
               id: 'select',
@@ -382,7 +403,7 @@ export function AnnouncementsSection({
             },
             {
               id: 'publish-date',
-              header: t('Publish Date'),
+              header: t('Event time'),
               cell: (announcement) => (
                 <div className='flex flex-col gap-1'>
                   <span className='text-sm font-medium'>
@@ -398,18 +419,31 @@ export function AnnouncementsSection({
             },
             {
               id: 'type',
-              header: t('Type'),
+              header: t('Event type'),
               cell: (announcement) => (
                 <StatusBadge
-                  label={
+                  label={t(
                     typeOptions.find((opt) => opt.value === announcement.type)
-                      ?.label
-                  }
+                      ?.label ?? 'Other'
+                  )}
                   variant={
                     typeOptions.find((opt) => opt.value === announcement.type)
                       ?.badgeVariant ?? 'neutral'
                   }
                   copyable={false}
+                />
+              ),
+            },
+            {
+              id: 'published',
+              header: t('Published'),
+              cell: (announcement) => (
+                <Switch
+                  checked={announcement.published}
+                  onCheckedChange={(checked) =>
+                    togglePublished(announcement.id, checked)
+                  }
+                  aria-label={t('Published')}
                 />
               ),
             },
@@ -440,11 +474,11 @@ export function AnnouncementsSection({
         open={showDialog}
         onOpenChange={setShowDialog}
         title={
-          editingAnnouncement ? t('Edit Announcement') : t('Add Announcement')
+          editingAnnouncement
+            ? t('Edit Timeline Entry')
+            : t('Add Timeline Entry')
         }
-        description={t(
-          'Create or update system announcements for the dashboard'
-        )}
+        description={t('Timeline entry details')}
         contentClassName='max-w-2xl'
         contentHeight='auto'
         bodyClassName='space-y-4'
@@ -477,9 +511,7 @@ export function AnnouncementsSection({
                   <FormLabel>{t('Content')}</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder={t(
-                        'Enter announcement content (supports Markdown/HTML)'
-                      )}
+                      placeholder={t('Timeline content')}
                       rows={4}
                       {...field}
                     />
@@ -496,21 +528,16 @@ export function AnnouncementsSection({
               name='publishDate'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('Publish Date')}</FormLabel>
+                  <FormLabel>{t('Event time')}</FormLabel>
                   <FormControl>
                     <DateTimePicker
                       value={field.value ? new Date(field.value) : undefined}
                       onChange={(date) =>
                         field.onChange(date ? date.toISOString() : '')
                       }
-                      placeholder={t('Select publish date')}
+                      placeholder={t('Select event time')}
                     />
                   </FormControl>
-                  <FormDescription>
-                    {t(
-                      'Date and time when this announcement should be displayed'
-                    )}
-                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -520,7 +547,7 @@ export function AnnouncementsSection({
               name='type'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('Type')}</FormLabel>
+                  <FormLabel>{t('Event type')}</FormLabel>
                   <Select
                     items={typeOptions.map((option) => ({
                       value: option.value,
@@ -529,7 +556,7 @@ export function AnnouncementsSection({
                           <div
                             className={`h-3 w-3 rounded-full ${option.color}`}
                           />
-                          {option.label}
+                          {t(option.label)}
                         </div>
                       ),
                     }))}
@@ -538,9 +565,7 @@ export function AnnouncementsSection({
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue
-                          placeholder={t('Select announcement type')}
-                        />
+                        <SelectValue placeholder={t('Select event type')} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent alignItemWithTrigger={false}>
@@ -551,7 +576,7 @@ export function AnnouncementsSection({
                               <div
                                 className={`h-3 w-3 rounded-full ${option.color}`}
                               />
-                              {option.label}
+                              {t(option.label)}
                             </div>
                           </SelectItem>
                         ))}
@@ -559,6 +584,21 @@ export function AnnouncementsSection({
                     </SelectContent>
                   </Select>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='published'
+              render={({ field }) => (
+                <FormItem className='flex items-center justify-between gap-4 rounded-md border p-3'>
+                  <FormLabel>{t('Publish to timeline')}</FormLabel>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
                 </FormItem>
               )}
             />
@@ -593,10 +633,13 @@ export function AnnouncementsSection({
             <AlertDialogTitle>{t('Are you sure?')}</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTarget === 'single'
-                ? t('This announcement will be removed from the list.')
-                : t('{{count}} announcements will be removed from the list.', {
-                    count: selectedIds.length,
-                  })}
+                ? t('This timeline entry will be removed from the list.')
+                : t(
+                    '{{count}} timeline entries will be removed from the list.',
+                    {
+                      count: selectedIds.length,
+                    }
+                  )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
