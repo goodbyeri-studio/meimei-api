@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Crown, Sparkles, Check } from 'lucide-react'
+import { AlertCircle, Crown, RefreshCw, Sparkles, Check } from 'lucide-react'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -55,7 +55,6 @@ import { SubscriptionAccountPanel } from './subscription-account-panel'
 
 interface SubscriptionPlansCardProps {
   topupInfo: TopupInfo | null
-  onAvailabilityChange?: (available: boolean) => void
   userQuota?: number
   onPurchaseSuccess?: () => void | Promise<void>
 }
@@ -66,12 +65,7 @@ function getEpayMethods(payMethods: PaymentMethod[] = []): PaymentMethod[] {
   )
 }
 
-export function SubscriptionPlansCard({
-  topupInfo,
-  onAvailabilityChange,
-  userQuota,
-  onPurchaseSuccess,
-}: SubscriptionPlansCardProps) {
+export function SubscriptionPlansCard(props: SubscriptionPlansCardProps) {
   const { t } = useTranslation()
 
   const [plans, setPlans] = useState<PlanRecord[]>([])
@@ -84,20 +78,22 @@ export function SubscriptionPlansCard({
   const [billingPreference, setBillingPreference] =
     useState('subscription_first')
   const [loading, setLoading] = useState(true)
+  const [plansLoadError, setPlansLoadError] = useState(false)
+  const [subscriptionLoadError, setSubscriptionLoadError] = useState(false)
   const [updatingPreference, setUpdatingPreference] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
   const [purchaseOpen, setPurchaseOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<PlanRecord | null>(null)
 
-  const enableStripe = !!topupInfo?.enable_stripe_topup
-  const enableCreem = !!topupInfo?.enable_creem_topup
-  const enableWaffoPancake = !!topupInfo?.enable_waffo_pancake_topup
-  const enableOnlineTopUp = !!topupInfo?.enable_online_topup
-  const enableWechatPay = !!topupInfo?.enable_wechat_pay
+  const enableStripe = !!props.topupInfo?.enable_stripe_topup
+  const enableCreem = !!props.topupInfo?.enable_creem_topup
+  const enableWaffoPancake = !!props.topupInfo?.enable_waffo_pancake_topup
+  const enableOnlineTopUp = !!props.topupInfo?.enable_online_topup
+  const enableWechatPay = !!props.topupInfo?.enable_wechat_pay
   const epayMethods = useMemo(
-    () => getEpayMethods(topupInfo?.pay_methods),
-    [topupInfo?.pay_methods]
+    () => getEpayMethods(props.topupInfo?.pay_methods),
+    [props.topupInfo?.pay_methods]
   )
 
   const fetchPlans = useCallback(async () => {
@@ -105,9 +101,12 @@ export function SubscriptionPlansCard({
       const res = await getPublicPlans()
       if (res.success) {
         setPlans(res.data || [])
+        setPlansLoadError(false)
+        return
       }
+      setPlansLoadError(true)
     } catch {
-      setPlans([])
+      setPlansLoadError(true)
     }
   }, [])
 
@@ -120,9 +119,12 @@ export function SubscriptionPlansCard({
         )
         setActiveSubscriptions(res.data.subscriptions || [])
         setAllSubscriptions(res.data.all_subscriptions || [])
+        setSubscriptionLoadError(false)
+        return
       }
+      setSubscriptionLoadError(true)
     } catch {
-      // ignore
+      setSubscriptionLoadError(true)
     }
   }, [])
 
@@ -138,7 +140,7 @@ export function SubscriptionPlansCard({
   const handleRefresh = async () => {
     setRefreshing(true)
     try {
-      await fetchSelfSubscription()
+      await Promise.all([fetchPlans(), fetchSelfSubscription()])
     } finally {
       setRefreshing(false)
     }
@@ -165,9 +167,6 @@ export function SubscriptionPlansCard({
     }
   }
 
-  const hasAny = allSubscriptions.length > 0
-  const isAvailable = loading || plans.length > 0 || hasAny
-
   const planPurchaseCountMap = useMemo(() => {
     const map = new Map<number, number>()
     for (const sub of allSubscriptions) {
@@ -177,10 +176,6 @@ export function SubscriptionPlansCard({
     }
     return map
   }, [allSubscriptions])
-
-  useEffect(() => {
-    onAvailabilityChange?.(isAvailable)
-  }, [isAvailable, onAvailabilityChange])
 
   if (loading) {
     return (
@@ -199,10 +194,6 @@ export function SubscriptionPlansCard({
     )
   }
 
-  if (plans.length === 0 && !hasAny) {
-    return null
-  }
-
   return (
     <>
       <TitledCard
@@ -218,11 +209,37 @@ export function SubscriptionPlansCard({
           activeSubscriptions={activeSubscriptions}
           allSubscriptions={allSubscriptions}
           billingPreference={billingPreference}
+          loadError={subscriptionLoadError}
           updatingPreference={updatingPreference}
           refreshing={refreshing}
           onPreferenceChange={handlePreferenceChange}
           onRefresh={handleRefresh}
         />
+
+        {plansLoadError ? (
+          <div
+            className='border-destructive/40 bg-destructive/5 text-destructive flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm'
+            role='alert'
+          >
+            <span className='flex items-center gap-2'>
+              <AlertCircle className='size-4 shrink-0' aria-hidden='true' />
+              {t('Failed to load')}
+            </span>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              <RefreshCw
+                className={refreshing ? 'animate-spin' : undefined}
+                data-icon='inline-start'
+                aria-hidden='true'
+              />
+              {t('Retry')}
+            </Button>
+          </div>
+        ) : null}
 
         {/* Available plans grid */}
         {plans.length > 0 ? (
@@ -330,11 +347,13 @@ export function SubscriptionPlansCard({
               )
             })}
           </div>
-        ) : (
+        ) : null}
+
+        {plans.length === 0 && !plansLoadError ? (
           <p className='text-muted-foreground py-4 text-center text-sm'>
             {t('No plans available')}
           </p>
-        )}
+        ) : null}
       </TitledCard>
 
       <SubscriptionPurchaseDialog
@@ -352,8 +371,8 @@ export function SubscriptionPlansCard({
         enableWechatPay={enableWechatPay}
         enableOnlineTopUp={enableOnlineTopUp}
         epayMethods={epayMethods}
-        userQuota={userQuota}
-        onPurchaseSuccess={onPurchaseSuccess}
+        userQuota={props.userQuota}
+        onPurchaseSuccess={props.onPurchaseSuccess}
         purchaseLimit={
           selectedPlan?.plan?.max_purchase_per_user
             ? Number(selectedPlan.plan.max_purchase_per_user)

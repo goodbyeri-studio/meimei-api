@@ -57,6 +57,7 @@ interface SubscriptionAccountPanelProps {
   activeSubscriptions: UserSubscriptionRecord[]
   allSubscriptions: UserSubscriptionRecord[]
   billingPreference: string
+  loadError: boolean
   updatingPreference: boolean
   refreshing: boolean
   onPreferenceChange: (preference: string) => void
@@ -89,9 +90,19 @@ export function SubscriptionAccountPanel(props: SubscriptionAccountPanelProps) {
     ? (props.billingPreference as BillingPreference)
     : 'subscription_first'
   const hasUnavailableSubscriptionPreference =
+    !props.loadError &&
     !hasActive &&
     (currentPreference === 'subscription_first' ||
       currentPreference === 'subscription_only')
+  let accountStatusLabel = t('No Active')
+  let accountStatusVariant: 'danger' | 'neutral' | 'success' = 'neutral'
+  if (props.loadError) {
+    accountStatusLabel = t('Failed to load')
+    accountStatusVariant = 'danger'
+  } else if (hasActive) {
+    accountStatusLabel = `${props.activeSubscriptions.length} ${t('active')}`
+    accountStatusVariant = 'success'
+  }
 
   const planTitleMap = useMemo(() => {
     const map = new Map<number, string>()
@@ -109,21 +120,12 @@ export function SubscriptionAccountPanel(props: SubscriptionAccountPanelProps) {
         <div className='min-w-0'>
           <div className='flex flex-wrap items-center gap-2'>
             <h4 className='text-sm font-semibold'>{t('My Subscriptions')}</h4>
-            {hasActive ? (
-              <StatusBadge
-                label={`${props.activeSubscriptions.length} ${t('active')}`}
-                variant='success'
-                size='sm'
-                copyable={false}
-              />
-            ) : (
-              <StatusBadge
-                label={t('No Active')}
-                variant='neutral'
-                size='sm'
-                copyable={false}
-              />
-            )}
+            <StatusBadge
+              label={accountStatusLabel}
+              variant={accountStatusVariant}
+              size='sm'
+              copyable={false}
+            />
           </div>
           <p className='text-muted-foreground mt-1 text-xs'>
             {t('Billing Priority')}
@@ -137,7 +139,7 @@ export function SubscriptionAccountPanel(props: SubscriptionAccountPanelProps) {
               label: getBillingPreferenceLabel(preference, t),
             }))}
             value={currentPreference}
-            disabled={props.updatingPreference}
+            disabled={props.loadError || props.updatingPreference}
             onValueChange={(value) => {
               if (value !== null) props.onPreferenceChange(value)
             }}
@@ -287,11 +289,22 @@ export function SubscriptionAccountPanel(props: SubscriptionAccountPanelProps) {
             })}
           </div>
         </>
-      ) : (
+      ) : null}
+
+      {!hasAny && props.loadError ? (
+        <p
+          className='text-destructive border-t px-3 py-3 text-xs sm:px-4'
+          role='alert'
+        >
+          {t('Failed to load')}
+        </p>
+      ) : null}
+
+      {!hasAny && !props.loadError ? (
         <p className='text-muted-foreground border-t px-3 py-3 text-xs sm:px-4'>
           {t('Subscribe to a plan for model access')}
         </p>
-      )}
+      ) : null}
     </section>
   )
 }
