@@ -55,6 +55,7 @@ import { copyToClipboard } from '@/lib/copy-to-clipboard'
 
 import { updateApiKeyStatus } from '../api'
 import { API_KEY_STATUS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
+import { buildCCSwitchURL, type CCSwitchApp } from '../lib/cc-switch'
 import { apiKeySchema } from '../types'
 import { useApiKeys } from './api-keys-provider'
 
@@ -84,7 +85,6 @@ export function DataTableRowActions<TData>({
     setOpen,
     setCurrentRow,
     triggerRefresh,
-    setResolvedKey,
     resolveRealKey,
     resolvedKeys,
     loadingKeys,
@@ -98,7 +98,7 @@ export function DataTableRowActions<TData>({
   const hasChatPresets = chatPresets.length > 0
   const toggleLabel = isEnabled ? t('Disable') : t('Enable')
 
-  const handleMenuOpenChange = useCallback(
+  const handleCCSwitchMenuOpenChange = useCallback(
     (open: boolean) => {
       if (open && !resolvedRealKey && !isRealKeyLoading) {
         void resolveRealKey(apiKey.id)
@@ -107,12 +107,47 @@ export function DataTableRowActions<TData>({
     [apiKey.id, isRealKeyLoading, resolvedRealKey, resolveRealKey]
   )
 
-  const getCachedRealKey = useCallback(() => {
-    if (resolvedRealKey) return resolvedRealKey
-    void resolveRealKey(apiKey.id)
-    toast.info(t('API key is loading, please try again in a moment'))
-    return null
-  }, [apiKey.id, resolvedRealKey, resolveRealKey, t])
+  const handleOpenCCSwitch = useCallback(
+    (app: CCSwitchApp) => {
+      if (!resolvedRealKey) return
+
+      let ccSwitchUrl: string
+      try {
+        ccSwitchUrl = buildCCSwitchURL({
+          app,
+          apiKey: resolvedRealKey,
+          serverAddress: getServerAddress(),
+        })
+      } catch {
+        toast.error(
+          t(
+            'Unable to open CC Switch because the server address is invalid. Please contact your administrator.'
+          )
+        )
+        return
+      }
+
+      try {
+        window.open(ccSwitchUrl, '_self')
+        window.setTimeout(() => {
+          if (document.hasFocus()) {
+            toast.info(
+              t(
+                'If CC Switch did not open, make sure it is installed and try again.'
+              )
+            )
+          }
+        }, 100)
+      } catch {
+        toast.error(
+          t(
+            'If CC Switch did not open, make sure it is installed and try again.'
+          )
+        )
+      }
+    },
+    [resolvedRealKey, t]
+  )
 
   const handleOpenChatPreset = useCallback(
     async (preset: ChatPreset) => {
@@ -236,11 +271,10 @@ export function DataTableRowActions<TData>({
         ariaLabel={t('Open menu')}
         contentClassName='w-[200px]'
         modal={false}
-        onOpenChange={handleMenuOpenChange}
       >
         <DropdownMenuItem
           onClick={async () => {
-            const realKey = getCachedRealKey()
+            const realKey = await resolveRealKey(apiKey.id)
             if (!realKey) return
             const ok = await copyToClipboard(realKey)
             if (ok) toast.success(t('Copied'))
@@ -253,7 +287,7 @@ export function DataTableRowActions<TData>({
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={async () => {
-            const realKey = getCachedRealKey()
+            const realKey = await resolveRealKey(apiKey.id)
             if (!realKey) return
             const connStr = encodeChannelConnectionInfo(
               realKey,
@@ -269,20 +303,32 @@ export function DataTableRowActions<TData>({
           </DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={async () => {
-            const realKey = await resolveRealKey(apiKey.id)
-            if (!realKey) return
-            setResolvedKey(realKey)
-            setCurrentRow(apiKey)
-            setOpen('cc-switch')
-          }}
-        >
-          {t('CC Switch')}
-          <DropdownMenuShortcut>
-            <ArrowRightLeft size={16} />
-          </DropdownMenuShortcut>
-        </DropdownMenuItem>
+        <DropdownMenuSub onOpenChange={handleCCSwitchMenuOpenChange}>
+          <DropdownMenuSubTrigger>
+            {t('CC Switch')}
+            <DropdownMenuShortcut>
+              {isRealKeyLoading ? (
+                <Loader2 className='size-4 animate-spin' />
+              ) : (
+                <ArrowRightLeft size={16} />
+              )}
+            </DropdownMenuShortcut>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuItem
+              disabled={!resolvedRealKey}
+              onClick={() => handleOpenCCSwitch('codex')}
+            >
+              {t('Codex')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!resolvedRealKey}
+              onClick={() => handleOpenCCSwitch('claude')}
+            >
+              {t('Claude')}
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
         {hasChatPresets && (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>{t('Chat')}</DropdownMenuSubTrigger>

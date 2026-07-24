@@ -19,16 +19,15 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
-import { buildCCSwitchURL, CC_SWITCH_APP_CONFIGS } from './cc-switch'
+import { buildCCSwitchURL } from './cc-switch'
 
 const serverAddress = 'https://api.meimei.example'
 
 describe('CC Switch provider URL', () => {
-  test('uses the Codex endpoint and default provider name without a model', () => {
+  test('uses the explicitly selected Codex app without asking for a model', () => {
     const url = new URL(
       buildCCSwitchURL({
         app: 'codex',
-        name: CC_SWITCH_APP_CONFIGS.codex.defaultName,
         apiKey: 'sk-codex-key',
         serverAddress,
       })
@@ -45,11 +44,10 @@ describe('CC Switch provider URL', () => {
     assert.equal(url.searchParams.has('model'), false)
   })
 
-  test('uses the Claude endpoint and default provider name without a model', () => {
+  test('uses the explicitly selected Claude app without asking for a model', () => {
     const url = new URL(
       buildCCSwitchURL({
         app: 'claude',
-        name: CC_SWITCH_APP_CONFIGS.claude.defaultName,
         apiKey: 'sk-claude-key',
         serverAddress,
       })
@@ -66,7 +64,6 @@ describe('CC Switch provider URL', () => {
     const url = new URL(
       buildCCSwitchURL({
         app: 'codex',
-        name: 'meimei-codex',
         apiKey: 'sk-test',
         serverAddress: `${serverAddress}/`,
       })
@@ -80,7 +77,6 @@ describe('CC Switch provider URL', () => {
     const url = new URL(
       buildCCSwitchURL({
         app: 'codex',
-        name: 'meimei-codex',
         apiKey: 'sk-test',
         serverAddress: `${serverAddress}/v1/`,
       })
@@ -93,7 +89,6 @@ describe('CC Switch provider URL', () => {
     const url = new URL(
       buildCCSwitchURL({
         app: 'codex',
-        name: 'meimei-codex',
         apiKey: 'sk-test',
         serverAddress: `${serverAddress}/relay/?source=console#settings`,
       })
@@ -103,17 +98,15 @@ describe('CC Switch provider URL', () => {
     assert.equal(url.searchParams.get('homepage'), `${serverAddress}/relay`)
   })
 
-  test('encodes provider names and API keys without changing their values', () => {
+  test('normalizes API keys while preserving encoded key characters', () => {
     const url = new URL(
       buildCCSwitchURL({
         app: 'claude',
-        name: '美美 & Claude',
-        apiKey: 'sk-a+b&c%20',
+        apiKey: 'a+b&c%20',
         serverAddress,
       })
     )
 
-    assert.equal(url.searchParams.get('name'), '美美 & Claude')
     assert.equal(url.searchParams.get('apiKey'), 'sk-a+b&c%20')
   })
 
@@ -122,7 +115,6 @@ describe('CC Switch provider URL', () => {
       () =>
         buildCCSwitchURL({
           app: 'codex',
-          name: 'meimei-codex',
           apiKey: 'sk-test',
           serverAddress: 'javascript:alert(1)',
         }),

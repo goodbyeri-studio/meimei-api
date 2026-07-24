@@ -16,13 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export const CC_SWITCH_APP_CONFIGS = {
+const CC_SWITCH_APP_CONFIGS = {
   claude: {
-    label: 'Claude',
     defaultName: 'meimei-claude',
   },
   codex: {
-    label: 'Codex',
     defaultName: 'meimei-codex',
   },
 } as const
@@ -31,12 +29,12 @@ export type CCSwitchApp = keyof typeof CC_SWITCH_APP_CONFIGS
 
 type CCSwitchURLParams = {
   app: CCSwitchApp
-  name: string
   apiKey: string
   serverAddress: string
 }
 
 export function buildCCSwitchURL(params: CCSwitchURLParams): string {
+  const appConfig = CC_SWITCH_APP_CONFIGS[params.app]
   const serverURL = new URL(params.serverAddress.trim())
   if (serverURL.protocol !== 'http:' && serverURL.protocol !== 'https:') {
     throw new TypeError('CC Switch server address must use HTTP or HTTPS')
@@ -54,9 +52,12 @@ export function buildCCSwitchURL(params: CCSwitchURLParams): string {
   const searchParams = new URLSearchParams()
   searchParams.set('resource', 'provider')
   searchParams.set('app', params.app)
-  searchParams.set('name', params.name)
+  searchParams.set('name', appConfig.defaultName)
   searchParams.set('endpoint', endpoint)
-  searchParams.set('apiKey', params.apiKey)
+  searchParams.set(
+    'apiKey',
+    params.apiKey.startsWith('sk-') ? params.apiKey : `sk-${params.apiKey}`
+  )
   searchParams.set('homepage', serverAddress)
   searchParams.set('enabled', 'true')
   return `ccswitch://v1/import?${searchParams.toString()}`
