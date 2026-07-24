@@ -19,7 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import { AlertCircle, Crown, RefreshCw, Sparkles, Check } from 'lucide-react'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
@@ -35,7 +34,6 @@ import {
 import {
   getPublicPlans,
   getSelfSubscriptionFull,
-  updateBillingPreference,
 } from '@/features/subscriptions/api'
 import { SubscriptionPurchaseDialog } from '@/features/subscriptions/components/dialogs/subscription-purchase-dialog'
 import {
@@ -49,51 +47,28 @@ import type {
 import { formatQuotaCNY } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-import type { PaymentMethod, TopupInfo } from '../types'
-import { SubscriptionAccountPanel } from './subscription-account-panel'
+import type { TopupInfo } from '../types'
 
 interface SubscriptionPlansCardProps {
   topupInfo: TopupInfo | null
-  userQuota?: number
   onPurchaseSuccess?: () => void | Promise<void>
-}
-
-function getEpayMethods(payMethods: PaymentMethod[] = []): PaymentMethod[] {
-  return payMethods.filter(
-    (m) => m?.type && m.type !== 'stripe' && m.type !== 'creem'
-  )
 }
 
 export function SubscriptionPlansCard(props: SubscriptionPlansCardProps) {
   const { t } = useTranslation()
 
   const [plans, setPlans] = useState<PlanRecord[]>([])
-  const [activeSubscriptions, setActiveSubscriptions] = useState<
-    UserSubscriptionRecord[]
-  >([])
   const [allSubscriptions, setAllSubscriptions] = useState<
     UserSubscriptionRecord[]
   >([])
-  const [billingPreference, setBillingPreference] =
-    useState('subscription_first')
   const [loading, setLoading] = useState(true)
   const [plansLoadError, setPlansLoadError] = useState(false)
-  const [subscriptionLoadError, setSubscriptionLoadError] = useState(false)
-  const [updatingPreference, setUpdatingPreference] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
   const [purchaseOpen, setPurchaseOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<PlanRecord | null>(null)
 
-  const enableStripe = !!props.topupInfo?.enable_stripe_topup
-  const enableCreem = !!props.topupInfo?.enable_creem_topup
-  const enableWaffoPancake = !!props.topupInfo?.enable_waffo_pancake_topup
-  const enableOnlineTopUp = !!props.topupInfo?.enable_online_topup
   const enableWechatPay = !!props.topupInfo?.enable_wechat_pay
-  const epayMethods = useMemo(
-    () => getEpayMethods(props.topupInfo?.pay_methods),
-    [props.topupInfo?.pay_methods]
-  )
 
   const fetchPlans = useCallback(async () => {
     try {
@@ -113,17 +88,12 @@ export function SubscriptionPlansCard(props: SubscriptionPlansCardProps) {
     try {
       const res = await getSelfSubscriptionFull()
       if (res.success && res.data) {
-        setBillingPreference(
-          res.data.billing_preference || 'subscription_first'
-        )
-        setActiveSubscriptions(res.data.subscriptions || [])
         setAllSubscriptions(res.data.all_subscriptions || [])
-        setSubscriptionLoadError(false)
-        return
+      } else {
+        setAllSubscriptions([])
       }
-      setSubscriptionLoadError(true)
     } catch {
-      setSubscriptionLoadError(true)
+      setAllSubscriptions([])
     }
   }, [])
 
@@ -142,27 +112,6 @@ export function SubscriptionPlansCard(props: SubscriptionPlansCardProps) {
       await Promise.all([fetchPlans(), fetchSelfSubscription()])
     } finally {
       setRefreshing(false)
-    }
-  }
-
-  const handlePreferenceChange = async (preference: string) => {
-    const previous = billingPreference
-    setBillingPreference(preference)
-    setUpdatingPreference(true)
-    try {
-      const res = await updateBillingPreference(preference)
-      if (res.success) {
-        setBillingPreference(res.data?.billing_preference || preference)
-        toast.success(t('Updated successfully'))
-        return
-      }
-      setBillingPreference(previous)
-      toast.error(res.message || t('Update failed'))
-    } catch {
-      setBillingPreference(previous)
-      toast.error(t('Request failed'))
-    } finally {
-      setUpdatingPreference(false)
     }
   }
 
@@ -203,18 +152,6 @@ export function SubscriptionPlansCard(props: SubscriptionPlansCardProps) {
         disableHoverEffect
         contentClassName='space-y-4 sm:space-y-5'
       >
-        <SubscriptionAccountPanel
-          plans={plans}
-          activeSubscriptions={activeSubscriptions}
-          allSubscriptions={allSubscriptions}
-          billingPreference={billingPreference}
-          loadError={subscriptionLoadError}
-          updatingPreference={updatingPreference}
-          refreshing={refreshing}
-          onPreferenceChange={handlePreferenceChange}
-          onRefresh={handleRefresh}
-        />
-
         {plansLoadError ? (
           <div
             className='border-destructive/40 bg-destructive/5 text-destructive flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm'
@@ -363,13 +300,7 @@ export function SubscriptionPlansCard(props: SubscriptionPlansCardProps) {
           }
         }}
         plan={selectedPlan}
-        enableStripe={enableStripe}
-        enableCreem={enableCreem}
-        enableWaffoPancake={enableWaffoPancake}
         enableWechatPay={enableWechatPay}
-        enableOnlineTopUp={enableOnlineTopUp}
-        epayMethods={epayMethods}
-        userQuota={props.userQuota}
         onPurchaseSuccess={props.onPurchaseSuccess}
         purchaseLimit={
           selectedPlan?.plan?.max_purchase_per_user
