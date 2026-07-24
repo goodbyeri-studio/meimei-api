@@ -211,6 +211,14 @@ export const STATIC_I18N_KEYS = [
   // Models section-registry nav (dynamic titleKey)
   'Grok',
 
+  // Timeline management (dynamic titleKey and event labels)
+  'Timeline Management',
+  'Other',
+  'Ratio adjusted',
+  'Model listed',
+  'Service change',
+  'Model removed',
+
   // Channel Affinity section
   'Channel Affinity',
 

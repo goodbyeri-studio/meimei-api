@@ -233,9 +233,7 @@ function AnnouncementsContent({
   }
 
   if (announcements.length === 0) {
-    return (
-      <EmptyState icon={<Megaphone />} title={t('No system announcements')} />
-    )
+    return <EmptyState icon={<Megaphone />} title={t('No timeline updates')} />
   }
 
   return (

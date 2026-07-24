@@ -55,7 +55,7 @@ const CONTENT_SECTIONS = [
   },
   {
     id: 'announcements',
-    titleKey: 'Announcements',
+    titleKey: 'Timeline Management',
     build: (settings: ContentSettings) => (
       <AnnouncementsSection
         enabled={settings['console_setting.announcements_enabled']}

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 var (
@@ -172,12 +173,17 @@ func validateAnnouncements(announcementsStr string) error {
 				}
 			}
 		}
-		if len(content) > 500 {
+		if utf8.RuneCountInString(content) > 500 {
 			return fmt.Errorf("第%d个公告的内容长度不能超过500字符", i+1)
 		}
 		if extra, exists := ann["extra"]; exists {
-			if extraStr, ok := extra.(string); ok && len(extraStr) > 200 {
+			if extraStr, ok := extra.(string); ok && utf8.RuneCountInString(extraStr) > 200 {
 				return fmt.Errorf("第%d个公告的说明长度不能超过200字符", i+1)
+			}
+		}
+		if published, exists := ann["published"]; exists {
+			if _, ok := published.(bool); !ok {
+				return fmt.Errorf("第%d个公告的发布状态必须为布尔值", i+1)
 			}
 		}
 	}
@@ -223,7 +229,18 @@ func getPublishTime(item map[string]interface{}) time.Time {
 }
 
 func GetAnnouncements() []map[string]interface{} {
-	list := getJSONList(GetConsoleSetting().Announcements)
+	all := getJSONList(GetConsoleSetting().Announcements)
+	list := make([]map[string]interface{}, 0, len(all))
+	for _, announcement := range all {
+		published, exists := announcement["published"]
+		if exists {
+			isPublished, ok := published.(bool)
+			if !ok || !isPublished {
+				continue
+			}
+		}
+		list = append(list, announcement)
+	}
 	sort.SliceStable(list, func(i, j int) bool {
 		return getPublishTime(list[i]).After(getPublishTime(list[j]))
 	})
