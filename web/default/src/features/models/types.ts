@@ -193,6 +193,18 @@ export interface SyncUpstreamResponse {
   }
 }
 
+export interface DeepKeyCatalogSyncResponse {
+  success: boolean
+  message?: string
+  data?: {
+    total: number
+    available: number
+    unavailable: number
+    created: number
+    updated: number
+  }
+}
+
 /**
  * Preview upstream diff response
  */

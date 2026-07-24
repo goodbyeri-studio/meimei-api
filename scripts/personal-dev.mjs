@@ -8,7 +8,6 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -28,6 +27,11 @@ const webComposePath = resolve(
   repoRoot,
   "deploy/personal-dev/docker-compose.web.yml",
 );
+const tunnelBootstrapPath = resolve(
+  repoRoot,
+  "scripts/bootstrap-personal-dev-tunnel.mjs",
+);
+const tunnelDir = resolve(repoRoot, ".personal-dev");
 
 function fail(message) {
   console.error(`[personal-dev] ${message}`);
@@ -77,7 +81,6 @@ const apiPort = value("PERSONAL_DEV_API_PORT", "3100");
 const localApiPort = value("PERSONAL_DEV_LOCAL_API_PORT", "3310");
 const webPort = value("PERSONAL_DEV_WEB_PORT", "3002");
 const target = `${user}@${sshHost}`;
-const tunnelSocket = `/tmp/meimei-api-personal-dev-${process.getuid?.() ?? "user"}.sock`;
 
 function requireConfiguration() {
   if (!existsSync(configPath)) {
@@ -308,73 +311,24 @@ function logs() {
 function down() {
   requireConfiguration();
   webDown();
-  tunnelDown();
   remoteCompose("down --remove-orphans");
 }
 
-function tunnelIsRunning() {
-  if (!existsSync(tunnelSocket)) return false;
-  const result = spawnSync("ssh", ["-S", tunnelSocket, "-O", "check", target], {
-    cwd: repoRoot,
-    stdio: "ignore",
-  });
-  return result.status === 0;
+function tunnelBootstrap() {
+  run(process.execPath, [tunnelBootstrapPath]);
 }
 
-function localApiPortIsListening() {
-  const result = spawnSync(
-    "lsof",
-    ["-nP", `-iTCP:${localApiPort}`, "-sTCP:LISTEN", "-t"],
-    { cwd: repoRoot, stdio: "ignore" },
-  );
-  if (result.error)
-    fail(`cannot inspect local tunnel port: ${result.error.message}`);
-  return result.status === 0;
-}
-
-function tunnelUp() {
-  requireConfiguration();
-  if (tunnelIsRunning()) {
-    console.log(
-      `[personal-dev] tunnel already listening on 127.0.0.1:${localApiPort}`,
-    );
-    return;
+function requireTunnelAssets() {
+  for (const name of ["tunnel_ed25519", "known_hosts", "tunnel.env"]) {
+    if (!existsSync(resolve(tunnelDir, name))) {
+      fail(`missing .personal-dev/${name}; run \`make personal-dev-tunnel-bootstrap\``);
+    }
   }
-  rmSync(tunnelSocket, { force: true });
-  run("ssh", [
-    ...sshArgs,
-    "-o",
-    "ExitOnForwardFailure=yes",
-    "-M",
-    "-S",
-    tunnelSocket,
-    "-fnNT",
-    "-L",
-    `127.0.0.1:${localApiPort}:127.0.0.1:${apiPort}`,
-    target,
-  ]);
-  console.log(`[personal-dev] tunnel listening on 127.0.0.1:${localApiPort}`);
-}
-
-function tunnelDown() {
-  if (!tunnelIsRunning()) {
-    rmSync(tunnelSocket, { force: true });
-  } else {
-    run("ssh", ["-S", tunnelSocket, "-O", "exit", target]);
-    rmSync(tunnelSocket, { force: true });
-  }
-
-  for (let attempt = 0; attempt < 20 && localApiPortIsListening(); attempt++) {
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
-  }
-  if (localApiPortIsListening()) {
-    fail(`local API port 127.0.0.1:${localApiPort} is still listening`);
-  }
-  console.log(`[personal-dev] tunnel stopped on 127.0.0.1:${localApiPort}`);
 }
 
 function webCompose(args) {
   requireConfiguration();
+  requireTunnelAssets();
   run("docker", [
     "compose",
     "--env-file",
@@ -386,9 +340,16 @@ function webCompose(args) {
 }
 
 function webUp() {
-  tunnelUp();
-  webCompose(["up", "-d", "--wait", "web-dev"]);
+  webCompose(["up", "-d", "--build", "--wait"]);
   console.log(`[personal-dev] frontend ready at http://127.0.0.1:${webPort}`);
+}
+
+function tunnelUp() {
+  webCompose(["up", "-d", "--build", "--wait", "tunnel"]);
+}
+
+function tunnelDown() {
+  webCompose(["stop", "tunnel"]);
 }
 
 function webStatus() {
@@ -396,7 +357,7 @@ function webStatus() {
 }
 
 function webLogs() {
-  webCompose(["logs", "--tail=200", "-f", "web-dev"]);
+  webCompose(["logs", "--tail=200", "-f", "web-dev", "tunnel"]);
 }
 
 function webDown() {
@@ -407,7 +368,7 @@ function webDown() {
 function doctor() {
   requireConfiguration();
   status();
-  tunnelUp();
+  webStatus();
   run("curl", [
     "--fail",
     "--silent",
@@ -425,6 +386,7 @@ function start() {
 
 const commands = {
   init,
+  "tunnel-bootstrap": tunnelBootstrap,
   start,
   sync,
   rebuild,

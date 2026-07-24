@@ -15,7 +15,7 @@ DEV_POSTGRES_USER = relay
 DEV_SQLITE_PATH ?= one-api.db
 PERSONAL_DEV_SCRIPT = node scripts/personal-dev.mjs
 
-.PHONY: all build-web build-web-classic build-all-web start-api dev dev-init dev-bootstrap dev-api dev-api-rebuild dev-infra-up dev-infra-status dev-backend dev-web dev-frontend dev-web-classic dev-down dev-reset reset-setup personal-dev-init personal-dev-up personal-dev-sync personal-dev-rebuild personal-dev-status personal-dev-logs personal-dev-doctor personal-dev-down personal-dev-tunnel-up personal-dev-tunnel-down personal-dev-web-up personal-dev-web-status personal-dev-web-logs personal-dev-web-down
+.PHONY: all build-web build-web-classic build-all-web start-api dev dev-init dev-bootstrap dev-api dev-api-rebuild dev-infra-up dev-infra-status dev-backend dev-web dev-frontend dev-web-classic dev-down dev-reset reset-setup personal-dev-init personal-dev-tunnel-bootstrap personal-dev-up personal-dev-sync personal-dev-rebuild personal-dev-status personal-dev-logs personal-dev-doctor personal-dev-down personal-dev-tunnel-up personal-dev-tunnel-down personal-dev-web-up personal-dev-web-status personal-dev-web-logs personal-dev-web-down
 
 all: build-all-web start-api
 
@@ -90,6 +90,9 @@ dev-reset: dev-init
 # remains the default for contributors without a personal VPS.
 personal-dev-init:
 	@$(PERSONAL_DEV_SCRIPT) init
+
+personal-dev-tunnel-bootstrap:
+	@$(PERSONAL_DEV_SCRIPT) tunnel-bootstrap
 
 personal-dev-up:
 	@$(PERSONAL_DEV_SCRIPT) start

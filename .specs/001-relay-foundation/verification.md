@@ -4,6 +4,9 @@
 
 | 日期 | 范围 | 命令/方式 | 结果 | 备注 |
 |---|---|---|---|---|
+| 2026-07-24 | Personal dev OrbStack | 两个服务 Compose config/build/up/health，项目级 stop/start | 通过 | `meimei-api-personal-web` 的 `web-dev` 与 `tunnel` 同启同停，3002/3310 均恢复 |
+| 2026-07-24 | Personal dev tunnel 恢复 | 终止 tunnel 内 SSH 子进程并持续探测 `/healthz/ready` | 通过 | `autossh` 恢复连接，tunnel 容器 restart count 保持 0 |
+| 2026-07-24 | Personal dev SSH 边界 | 核对 VPS `authorized_keys` 与 Compose mounts | 通过 | key 仅 permitopen `127.0.0.1:3100`，强制 `/bin/false`，未挂载管理 key |
 | 2026-07-12 | 上游锁定 | `git describe --tags --exact-match HEAD`; `git rev-parse HEAD` | 通过 | `v1.0.0-rc.21` / `bde9b2f44887d34ec54799ae191d50f97914359e` |
 | 2026-07-12 | License/署名 | 静态核对 `LICENSE`、`NOTICE`、README Section 7 和 AGENTS protected metadata | 通过 | 只证明文件保留，不代表法律审查完成 |
 | 2026-07-12 | foundation | `git diff --cached --check`; spec 文件静态核对 | 通过 | 不代表服务可运行 |

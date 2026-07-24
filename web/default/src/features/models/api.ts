@@ -28,6 +28,7 @@ import type {
   Vendor,
   SearchModelsParams,
   SyncUpstreamResponse,
+  DeepKeyCatalogSyncResponse,
   PreviewUpstreamDiffResponse,
   MissingModelsResponse,
   PrefillGroupsResponse,
@@ -191,6 +192,14 @@ export async function syncUpstream(params?: {
   overwrite?: SyncOverwritePayload[]
 }): Promise<SyncUpstreamResponse> {
   const res = await api.post('/api/models/sync_upstream', params)
+  return res.data
+}
+
+/**
+ * Refresh and persist the DeepKey model catalog.
+ */
+export async function syncDeepKeyCatalog(): Promise<DeepKeyCatalogSyncResponse> {
+  const res = await api.post('/api/models/deepkey/sync')
   return res.data
 }
 
