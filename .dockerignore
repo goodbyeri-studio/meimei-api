@@ -5,6 +5,7 @@
 .gitignore
 .env
 .env.*
+.personal-dev
 *.key
 *.p12
 *.pem
