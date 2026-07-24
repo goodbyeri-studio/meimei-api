@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Crown, Sparkles, Check } from 'lucide-react'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
@@ -34,6 +35,7 @@ import {
 import {
   getPublicPlans,
   getSelfSubscriptionFull,
+  updateBillingPreference,
 } from '@/features/subscriptions/api'
 import { SubscriptionPurchaseDialog } from '@/features/subscriptions/components/dialogs/subscription-purchase-dialog'
 import {
@@ -49,6 +51,7 @@ import { formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import type { PaymentMethod, TopupInfo } from '../types'
+import { SubscriptionAccountPanel } from './subscription-account-panel'
 
 interface SubscriptionPlansCardProps {
   topupInfo: TopupInfo | null
@@ -72,10 +75,17 @@ export function SubscriptionPlansCard({
   const { t } = useTranslation()
 
   const [plans, setPlans] = useState<PlanRecord[]>([])
+  const [activeSubscriptions, setActiveSubscriptions] = useState<
+    UserSubscriptionRecord[]
+  >([])
   const [allSubscriptions, setAllSubscriptions] = useState<
     UserSubscriptionRecord[]
   >([])
+  const [billingPreference, setBillingPreference] =
+    useState('subscription_first')
   const [loading, setLoading] = useState(true)
+  const [updatingPreference, setUpdatingPreference] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   const [purchaseOpen, setPurchaseOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<PlanRecord | null>(null)
@@ -105,6 +115,10 @@ export function SubscriptionPlansCard({
     try {
       const res = await getSelfSubscriptionFull()
       if (res.success && res.data) {
+        setBillingPreference(
+          res.data.billing_preference || 'subscription_first'
+        )
+        setActiveSubscriptions(res.data.subscriptions || [])
         setAllSubscriptions(res.data.all_subscriptions || [])
       }
     } catch {
@@ -120,6 +134,36 @@ export function SubscriptionPlansCard({
     }
     init()
   }, [fetchPlans, fetchSelfSubscription])
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await fetchSelfSubscription()
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const handlePreferenceChange = async (preference: string) => {
+    const previous = billingPreference
+    setBillingPreference(preference)
+    setUpdatingPreference(true)
+    try {
+      const res = await updateBillingPreference(preference)
+      if (res.success) {
+        setBillingPreference(res.data?.billing_preference || preference)
+        toast.success(t('Updated successfully'))
+        return
+      }
+      setBillingPreference(previous)
+      toast.error(res.message || t('Update failed'))
+    } catch {
+      setBillingPreference(previous)
+      toast.error(t('Request failed'))
+    } finally {
+      setUpdatingPreference(false)
+    }
+  }
 
   const hasAny = allSubscriptions.length > 0
   const isAvailable = loading || plans.length > 0 || hasAny
@@ -169,6 +213,17 @@ export function SubscriptionPlansCard({
         disableHoverEffect
         contentClassName='space-y-4 sm:space-y-5'
       >
+        <SubscriptionAccountPanel
+          plans={plans}
+          activeSubscriptions={activeSubscriptions}
+          allSubscriptions={allSubscriptions}
+          billingPreference={billingPreference}
+          updatingPreference={updatingPreference}
+          refreshing={refreshing}
+          onPreferenceChange={handlePreferenceChange}
+          onRefresh={handleRefresh}
+        />
+
         {/* Available plans grid */}
         {plans.length > 0 ? (
           <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'>

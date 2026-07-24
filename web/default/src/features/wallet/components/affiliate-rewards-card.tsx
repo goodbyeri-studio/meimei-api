@@ -16,14 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  ArrowUpRight,
-  BarChart3,
-  Gift,
-  Receipt,
-  TrendingUp,
-  Users,
-} from 'lucide-react'
+import { ArrowUpRight, BarChart3, Gift, TrendingUp, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
@@ -40,7 +33,6 @@ interface AffiliateRewardsCardProps {
   user: UserWalletData | null
   affiliateLink: string
   onTransfer: () => void
-  onOpenBilling: () => void
   complianceConfirmed?: boolean
   loading?: boolean
 }
@@ -49,7 +41,6 @@ export function AffiliateRewardsCard({
   user,
   affiliateLink,
   onTransfer,
-  onOpenBilling,
   complianceConfirmed = true,
   loading,
 }: AffiliateRewardsCardProps) {
@@ -78,29 +69,18 @@ export function AffiliateRewardsCard({
   return (
     <Card data-card-hover='false' className='h-full gap-0 overflow-hidden py-0'>
       <CardHeader className='border-b p-3 !pb-3 sm:p-5 sm:!pb-5'>
-        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-          <div className='flex min-w-0 items-center gap-2.5'>
-            <IconBadge tone='success'>
-              <Gift />
-            </IconBadge>
-            <div className='min-w-0'>
-              <h3 className='text-sm font-semibold sm:text-base'>
-                {t('Referral Rewards')}
-              </h3>
-              <p className='text-muted-foreground text-xs sm:text-sm'>
-                {t('Invite friends and earn additional rewards')}
-              </p>
-            </div>
+        <div className='flex min-w-0 items-center gap-2.5'>
+          <IconBadge tone='success'>
+            <Gift />
+          </IconBadge>
+          <div className='min-w-0'>
+            <h3 className='text-sm font-semibold sm:text-base'>
+              {t('Referral Rewards')}
+            </h3>
+            <p className='text-muted-foreground text-xs sm:text-sm'>
+              {t('Invite friends and earn additional rewards')}
+            </p>
           </div>
-          <Button
-            variant='outline'
-            size='sm'
-            onClick={onOpenBilling}
-            className='w-full shrink-0 gap-2 sm:w-auto'
-          >
-            <Receipt className='h-4 w-4' />
-            {t('Order History')}
-          </Button>
         </div>
       </CardHeader>
 
