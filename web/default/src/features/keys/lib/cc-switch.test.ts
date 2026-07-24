@@ -19,15 +19,15 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
-import { buildCCSwitchURL, resolveCCSwitchApp } from './cc-switch'
+import { buildCCSwitchURL } from './cc-switch'
 
 const serverAddress = 'https://api.meimei.example'
 
 describe('CC Switch provider URL', () => {
-  test('infers Codex from the token group without asking for a model', () => {
+  test('uses the explicitly selected Codex app without asking for a model', () => {
     const url = new URL(
       buildCCSwitchURL({
-        group: 'gpt',
+        app: 'codex',
         apiKey: 'sk-codex-key',
         serverAddress,
       })
@@ -44,10 +44,10 @@ describe('CC Switch provider URL', () => {
     assert.equal(url.searchParams.has('model'), false)
   })
 
-  test('falls back to Claude for non-Codex token groups', () => {
+  test('uses the explicitly selected Claude app without asking for a model', () => {
     const url = new URL(
       buildCCSwitchURL({
-        group: 'claude-premium',
+        app: 'claude',
         apiKey: 'sk-claude-key',
         serverAddress,
       })
@@ -63,7 +63,7 @@ describe('CC Switch provider URL', () => {
   test('normalizes trailing slashes before adding the Codex API path', () => {
     const url = new URL(
       buildCCSwitchURL({
-        group: 'openai',
+        app: 'codex',
         apiKey: 'sk-test',
         serverAddress: `${serverAddress}/`,
       })
@@ -76,7 +76,7 @@ describe('CC Switch provider URL', () => {
   test('does not duplicate an existing Codex API path', () => {
     const url = new URL(
       buildCCSwitchURL({
-        group: 'codex',
+        app: 'codex',
         apiKey: 'sk-test',
         serverAddress: `${serverAddress}/v1/`,
       })
@@ -88,7 +88,7 @@ describe('CC Switch provider URL', () => {
   test('removes query and fragment data from the server address', () => {
     const url = new URL(
       buildCCSwitchURL({
-        group: 'gpt',
+        app: 'codex',
         apiKey: 'sk-test',
         serverAddress: `${serverAddress}/relay/?source=console#settings`,
       })
@@ -101,7 +101,7 @@ describe('CC Switch provider URL', () => {
   test('normalizes API keys while preserving encoded key characters', () => {
     const url = new URL(
       buildCCSwitchURL({
-        group: 'claude',
+        app: 'claude',
         apiKey: 'a+b&c%20',
         serverAddress,
       })
@@ -110,19 +110,11 @@ describe('CC Switch provider URL', () => {
     assert.equal(url.searchParams.get('apiKey'), 'sk-a+b&c%20')
   })
 
-  test('matches Codex group keywords case-insensitively', () => {
-    assert.equal(resolveCCSwitchApp('Codex-Pro'), 'codex')
-    assert.equal(resolveCCSwitchApp('GPT 0.26x'), 'codex')
-    assert.equal(resolveCCSwitchApp('OpenAI'), 'codex')
-    assert.equal(resolveCCSwitchApp('claude'), 'claude')
-    assert.equal(resolveCCSwitchApp(''), 'claude')
-  })
-
   test('rejects non-HTTP server addresses', () => {
     assert.throws(
       () =>
         buildCCSwitchURL({
-          group: 'gpt',
+          app: 'codex',
           apiKey: 'sk-test',
           serverAddress: 'javascript:alert(1)',
         }),

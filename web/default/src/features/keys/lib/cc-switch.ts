@@ -25,28 +25,16 @@ const CC_SWITCH_APP_CONFIGS = {
   },
 } as const
 
-type CCSwitchApp = keyof typeof CC_SWITCH_APP_CONFIGS
+export type CCSwitchApp = keyof typeof CC_SWITCH_APP_CONFIGS
 
 type CCSwitchURLParams = {
-  group: string
+  app: CCSwitchApp
   apiKey: string
   serverAddress: string
 }
 
-const CODEX_GROUP_KEYWORDS = ['codex', 'gpt', 'openai']
-
-export function resolveCCSwitchApp(group: string): CCSwitchApp {
-  const normalizedGroup = group.toLowerCase()
-  return CODEX_GROUP_KEYWORDS.some((keyword) =>
-    normalizedGroup.includes(keyword)
-  )
-    ? 'codex'
-    : 'claude'
-}
-
 export function buildCCSwitchURL(params: CCSwitchURLParams): string {
-  const app = resolveCCSwitchApp(params.group)
-  const appConfig = CC_SWITCH_APP_CONFIGS[app]
+  const appConfig = CC_SWITCH_APP_CONFIGS[params.app]
   const serverURL = new URL(params.serverAddress.trim())
   if (serverURL.protocol !== 'http:' && serverURL.protocol !== 'https:') {
     throw new TypeError('CC Switch server address must use HTTP or HTTPS')
@@ -58,12 +46,12 @@ export function buildCCSwitchURL(params: CCSwitchURLParams): string {
 
   const serverAddress = serverURL.toString().replace(/\/$/, '')
   const endpoint =
-    app === 'codex' && !serverURL.pathname.endsWith('/v1')
+    params.app === 'codex' && !serverURL.pathname.endsWith('/v1')
       ? `${serverAddress}/v1`
       : serverAddress
   const searchParams = new URLSearchParams()
   searchParams.set('resource', 'provider')
-  searchParams.set('app', app)
+  searchParams.set('app', params.app)
   searchParams.set('name', appConfig.defaultName)
   searchParams.set('endpoint', endpoint)
   searchParams.set(
